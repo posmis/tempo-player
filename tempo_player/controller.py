@@ -135,9 +135,32 @@ class Controller:
         if self.busy:
             return False
         sources.clear_cache()
-        self.history.touch()
+        self.history.clear()
         self._set_status("cache_cleared")
         return True
+
+    def remove_cached(self, video_id):
+        if self.busy:
+            return False  # вдруг этот файл сейчас скачивается
+        sources.delete_cached(video_id)
+        self.history.remove(video_id)
+        return True
+
+    def library(self):
+        """Треки в кэше, свежие сверху. Подробности — из истории прослушивания."""
+        meta = self.history.by_id()
+        items = []
+        for f in sources.cached_tracks():
+            h = meta.get(f["id"], {})
+            items.append({
+                "id": f["id"], "url": f["url"],
+                "title": h.get("title") or f["title"],
+                "duration": h.get("duration"),
+                "size_mb": round(f["size"] / 1024 / 1024, 1),
+                "played_at": h.get("played_at") or f["mtime"],
+            })
+        items.sort(key=lambda i: i["played_at"], reverse=True)
+        return items
 
     # ------------------------------------------------------------ эффекты
     def set_fx(self, name, key, value):
@@ -164,7 +187,7 @@ class Controller:
             "track_id": self.track_id,
             "cache_mb": round(sources.cache_size() / 1024 / 1024, 1),
             "current_id": self.current_id,
-            "history_rev": self.history.rev,
+            "library_rev": self.history.rev,
             "fx": self.engine.fx.snapshot(),
         }
 

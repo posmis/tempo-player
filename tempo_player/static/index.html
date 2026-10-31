@@ -197,7 +197,6 @@
     <header>
       <div class="logo">tempo<span>player</span></div>
       <div class="lang" id="lang"><button data-lang="ru">RU</button><button data-lang="en">EN</button></div>
-      <button class="ghost" id="cache" disabled></button>
       <button class="soft" id="open" data-i18n="open"></button>
       <input type="file" id="file" accept="audio/*,video/*,.mp3,.wav,.flac,.ogg,.m4a,.opus,.webm,.aac" hidden>
     </header>
@@ -277,7 +276,7 @@ const I18N = {
     title_none: 'Ничего не играет',
     hint_loaded: 'Пробел — пауза · файл можно просто перетащить в окно',
     hint_empty: 'Откройте файл, перетащите его сюда или вставьте ссылку',
-    open: 'Открыть файл', cache_empty: 'Кэш пуст', cache_clear: 'Очистить кэш · {mb} МБ',
+    open: 'Открыть файл', mb: '{n} МБ',
     url_ph: 'Вставьте ссылку на YouTube и нажмите Enter', listen: 'Слушать',
     mode_vinyl: 'Пластинка', mode_tempo: 'Только темп', mode_pitch: 'Только тон',
     orig_pitch: 'оригинальный тон', orig_speed: 'оригинальная скорость',
@@ -289,9 +288,9 @@ const I18N = {
     s_tone: 'Приглушение', s_crackle: 'Треск пластинки', u_db: 'дБ', u_ms: 'мс',
     keys: '<kbd>Пробел</kbd> пауза · <kbd>← →</kbd> скорость · <kbd>1 2 3</kbd> режим · <kbd>0</kbd> сброс',
     volume: 'Громкость', quit: 'Выключить',
-    recent: 'Недавние', clear: 'Очистить', hist_empty: 'Здесь появятся видео с YouTube, которые вы слушали',
-    in_cache: 'в кэше', redownload: 'скачается заново', today: 'сегодня', yesterday: 'вчера', days_ago: '{n} дн. назад',
-    remove: 'Убрать из списка', confirm_clear: 'Очистить список недавних? Скачанные файлы в кэше останутся.',
+    recent: 'В кэше', clear: 'Очистить', hist_empty: 'Здесь появятся треки, скачанные с YouTube. Из кэша они открываются мгновенно.',
+    today: 'сегодня', yesterday: 'вчера', days_ago: '{n} дн. назад',
+    remove: 'Удалить из кэша', confirm_clear: 'Удалить из кэша все скачанные треки ({mb})?',
     drop: 'Отпустите файл', off_title: 'Плеер выключен', off_sub: 'Запустите main.py снова и обновите страницу',
     uploading: 'Передаю файл…',
     st_loading: 'Загружаю…', st_searching: 'Ищу видео…', st_from_cache: 'Из кэша, без скачивания…',
@@ -302,7 +301,7 @@ const I18N = {
     title_none: 'Nothing playing',
     hint_loaded: 'Space — pause · you can drop a file right into the window',
     hint_empty: 'Open a file, drop it here or paste a link',
-    open: 'Open file', cache_empty: 'Cache empty', cache_clear: 'Clear cache · {mb} MB',
+    open: 'Open file', mb: '{n} MB',
     url_ph: 'Paste a YouTube link and press Enter', listen: 'Play',
     mode_vinyl: 'Vinyl', mode_tempo: 'Tempo only', mode_pitch: 'Pitch only',
     orig_pitch: 'original pitch', orig_speed: 'original speed',
@@ -314,9 +313,9 @@ const I18N = {
     s_tone: 'Muffle', s_crackle: 'Vinyl crackle', u_db: 'dB', u_ms: 'ms',
     keys: '<kbd>Space</kbd> pause · <kbd>← →</kbd> speed · <kbd>1 2 3</kbd> mode · <kbd>0</kbd> reset',
     volume: 'Volume', quit: 'Quit',
-    recent: 'Recent', clear: 'Clear', hist_empty: 'YouTube videos you play will show up here',
-    in_cache: 'cached', redownload: 'will re-download', today: 'today', yesterday: 'yesterday', days_ago: '{n} days ago',
-    remove: 'Remove from list', confirm_clear: 'Clear the recent list? Downloaded files stay in the cache.',
+    recent: 'In cache', clear: 'Clear', hist_empty: 'Tracks downloaded from YouTube will show up here. They open instantly from the cache.',
+    today: 'today', yesterday: 'yesterday', days_ago: '{n} days ago',
+    remove: 'Remove from cache', confirm_clear: 'Delete all downloaded tracks from the cache ({mb})?',
     drop: 'Drop the file', off_title: 'Player stopped', off_sub: 'Run main.py again and reload the page',
     uploading: 'Uploading file…',
     st_loading: 'Loading…', st_searching: 'Looking up the video…', st_from_cache: 'From cache, no download…',
@@ -371,7 +370,7 @@ const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volPos: 0.6, fx: {} };
 let peaks = [], peaksId = -1;
 let dragFrac = null, hoverFrac = null;
 let localPlaying = null, localPlayingUntil = 0;
-let hist = [], histRev = -1, histKey = '';
+let hist = [], histRev = -1, histKey = '', lastCacheMb = -1;
 
 // ---------------------------------------------------------------- сеть
 // у каждой вкладки свой id: сервер выключается, когда закрыта последняя
@@ -425,12 +424,9 @@ function onState() {
   st.classList.toggle('error', !!S.error);
   $('#go').disabled = S.busy;
   $('#go').textContent = S.busy ? '…' : t('listen');
-  const mb = S.cache_mb;
-  $('#cache').disabled = mb < 0.5 || S.busy;
-  $('#cache').textContent = mb >= 0.5 ? t('cache_clear', { mb: Math.round(mb) }) : t('cache_empty');
   $('#dur').textContent = fmt(S.duration);
   if (S.track_id !== peaksId) loadPeaks();
-  if (S.history_rev !== histRev) loadHistory();
+  if (S.library_rev !== histRev || S.cache_mb !== lastCacheMb) { lastCacheMb = S.cache_mb; loadHistory(); }
   else renderHistoryIfNeeded();
 }
 
@@ -574,7 +570,7 @@ document.querySelectorAll('[data-fxp]').forEach(b => b.onclick = () => applyFxPr
 // ---------------------------------------------------------------- история
 async function loadHistory() {
   try {
-    const r = await (await api('/api/history')).json();
+    const r = await (await api('/api/library')).json();
     hist = r.items; histRev = r.rev; histKey = '';
     renderHistoryIfNeeded();
   } catch (e) { /* ignore */ }
@@ -590,12 +586,14 @@ function ago(ts) {
 }
 function renderHistoryIfNeeded() {
   const playing = !!(S && S.playing);
-  const key = `${lang}|${histRev}|${S && S.current_id}|${playing}|${Math.floor(Date.now() / 60000)}`;
+  const key = `${lang}|${histRev}|${hist.length}|${S && S.current_id}|${playing}|${S && S.busy}|${Math.floor(Date.now() / 60000)}`;
   if (key === histKey) return;
   histKey = key;
   const list = $('#hlist'); list.innerHTML = '';
-  $('#hcount').textContent = hist.length ? ` · ${hist.length}` : '';
+  const mb = S ? S.cache_mb : 0;
+  $('#hcount').textContent = hist.length ? ` · ${hist.length} · ${t('mb', { n: Math.round(mb) })}` : '';
   $('#hclear').hidden = !hist.length;
+  $('#hclear').disabled = !!(S && S.busy);
   if (!hist.length) { list.append(el('div', 'hempty', t('hist_empty'))); return; }
   for (const it of hist) {
     const current = S && S.current_id === it.id;
@@ -608,18 +606,28 @@ function renderHistoryIfNeeded() {
     }
     const meta = el('div', 'hmeta');
     const sub = el('div', 'hsub');
-    if (it.cached) sub.append(el('span', 'dot'));
-    sub.append(document.createTextNode(`${fmt(it.duration)} · ${t(it.cached ? 'in_cache' : 'redownload')} · ${ago(it.played_at)}`));
+    const parts = [];
+    if (it.duration) parts.push(fmt(it.duration));
+    parts.push(t('mb', { n: it.size_mb < 10 ? it.size_mb.toFixed(1) : Math.round(it.size_mb) }));
+    parts.push(ago(it.played_at));
+    sub.textContent = parts.join(' · ');
     meta.append(el('div', 'htitle', it.title), sub);
     const del = el('button', 'hdel', '×'); del.title = t('remove');
-    del.onclick = (e) => { e.stopPropagation(); hist = hist.filter(h => h.id !== it.id); histKey = ''; renderHistoryIfNeeded(); act('history_remove', it.id); };
+    del.onclick = (e) => {
+      e.stopPropagation();
+      if (S && S.busy) return;
+      hist = hist.filter(h => h.id !== it.id); histKey = ''; renderHistoryIfNeeded();
+      act('cache_remove', it.id);
+    };
     row.onclick = () => { if (current) toggle(); else loadUrl(it.url); };
     row.append(icon, meta, del);
     list.append(row);
   }
 }
 $('#hclear').onclick = () => {
-  if (confirm(t('confirm_clear'))) { hist = []; histKey = ''; renderHistoryIfNeeded(); act('history_clear'); }
+  if (confirm(t('confirm_clear', { mb: t('mb', { n: Math.round(S ? S.cache_mb : 0) }) }))) {
+    hist = []; histKey = ''; renderHistoryIfNeeded(); act('clear_cache');
+  }
 };
 
 // ---------------------------------------------------------------- плеер
@@ -738,7 +746,6 @@ function loadUrl(url) { url = (url || '').trim(); if (url) post('/api/url', { ur
 $('#open').onclick = () => $('#file').click();
 $('#file').onchange = (e) => { upload(e.target.files[0]); e.target.value = ''; };
 $('#src').onsubmit = (e) => { e.preventDefault(); loadUrl($('#url').value); $('#url').blur(); };
-$('#cache').onclick = () => act('clear_cache');
 $('#quit').onclick = () => { act('quit'); setTimeout(() => $('#offline').classList.add('show'), 300); };
 $('#play').onclick = toggle;
 document.querySelectorAll('#modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));

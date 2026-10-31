@@ -1,14 +1,12 @@
-"""История прослушанных видео с YouTube.
+"""Сведения о скачанных треках: когда слушали, длительность, название.
 
-Хранится отдельно от кэша (очистка кэша историю не трогает):
+Сам список «В кэше» строится по файлам в кэше, а отсюда берутся подробности.
 Windows: %APPDATA%\\tempo-player\\history.json
 """
 import json
 import os
 import threading
 import time
-
-from . import sources
 
 DATA_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~/.local/share"), "tempo-player")
 FILE = os.path.join(DATA_DIR, "history.json")
@@ -57,13 +55,6 @@ class History:
             self._items = []
             self._save()
 
-    def items(self):
+    def by_id(self):
         with self._lock:
-            items = [dict(i) for i in self._items]
-        for i in items:
-            i["cached"] = sources.cached(i["url"]) is not None
-        return items
-
-    def touch(self):
-        """Кэш изменился — пометки «в кэше» надо обновить."""
-        self.rev += 1
+            return {i["id"]: dict(i) for i in self._items}

@@ -116,8 +116,8 @@ def make_handler(ctl, server_ref, presence):
             if path == "/api/spectrum":
                 bands = ctl.engine.spectrum() if ctl.engine.playing else []
                 return self._send(200, {"bands": [round(float(b), 3) for b in bands]})
-            if path == "/api/history":
-                return self._send(200, {"rev": ctl.history.rev, "items": ctl.history.items()})
+            if path == "/api/library":
+                return self._send(200, {"rev": ctl.history.rev, "items": ctl.library()})
             if path == "/api/peaks":
                 peaks = ctl.engine.peaks
                 data = [] if peaks is None else [round(float(p), 3) for p in peaks]
@@ -177,10 +177,8 @@ def make_handler(ctl, server_ref, presence):
                     ctl.set_volume(value)
                 elif action == "fx":
                     ctl.set_fx(value["name"], value["key"], value["val"])
-                elif action == "history_remove":
-                    ctl.history.remove(str(value))
-                elif action == "history_clear":
-                    ctl.history.clear()
+                elif action == "cache_remove":
+                    ctl.remove_cached(str(value))
                 elif action == "clear_cache":
                     ctl.clear_cache()
                 elif action == "quit":

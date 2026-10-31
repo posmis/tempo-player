@@ -81,6 +81,32 @@ def cached(url):
     return None
 
 
+def cached_tracks():
+    """Все треки, которые уже лежат в кэше: [{id, url, title, size, mtime}]."""
+    titles = _titles()
+    out = []
+    for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), "*")):
+        if not os.path.isfile(path):
+            continue
+        vid, ext = os.path.splitext(os.path.basename(path))
+        # недокачанные (id.webm.part), служебные .json и чужие файлы пропускаем
+        if ext in (".part", ".ytdl", ".json", ".tmp") or not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+            continue
+        st = os.stat(path)
+        out.append({"id": vid, "url": f"https://www.youtube.com/watch?v={vid}",
+                    "title": titles.get(vid, "YouTube"), "size": st.st_size, "mtime": st.st_mtime})
+    return out
+
+
+def delete_cached(video_id):
+    for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), glob.escape(video_id) + ".*")):
+        if not path.endswith(".json"):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def cache_size():
     """Размер кэша в байтах."""
     total = 0

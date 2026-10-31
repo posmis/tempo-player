@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tempo player</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e8a25a'/%3E%3Cpath d='M12 9.5v13l11-6.5z' fill='%2315110e'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #15110e;
+    --panel: #201914;
+    --panel-2: #2a211b;
+    --border: #3b2f27;
+    --text: #f2e7d8;
+    --muted: #9a887a;
+    --accent: #e8a25a;
+    --accent-hover: #f3b877;
+    --accent-dim: #b8763c;
+    --terracotta: #d0694c;
+    --gold: #e9c46f;
+    --wave-idle: #4a3a2f;
+    --error: #e07a6a;
+    color-scheme: dark;
+    accent-color: var(--accent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+    padding: 20px 16px 28px;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent); color: var(--bg); }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  button:disabled { cursor: default; opacity: .55; }
+
+  .wrap { max-width: 780px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 8px; padding: 0 6px 14px; }
+  header button { white-space: nowrap; }
+  .logo { font-size: 28px; font-weight: 700; letter-spacing: -.5px; margin-right: auto; }
+  .logo span { color: var(--accent); }
+  .ghost { color: var(--muted); font-size: 13px; padding: 9px 14px; border-radius: 12px; }
+  .ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+  .soft {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 16px; font-size: 13px;
+  }
+  .soft:hover { background: var(--border); }
+  .primary {
+    background: var(--accent); color: var(--bg); font-weight: 600; border-radius: 12px;
+    padding: 0 22px; height: 42px;
+  }
+  .primary:hover:not(:disabled) { background: var(--accent-hover); }
+
+  .card { background: var(--panel); border-radius: 18px; padding: 16px 18px; margin-bottom: 12px; }
+
+  form.src { display: flex; gap: 10px; }
+  form.src input {
+    flex: 1; min-width: 0; height: 42px; border-radius: 12px; padding: 0 14px;
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font: inherit;
+    caret-color: var(--accent);
+  }
+  form.src input::placeholder { color: var(--muted); }
+  form.src input:focus { border-color: var(--accent-dim); }
+
+  .now { display: flex; align-items: center; gap: 14px; }
+  .play {
+    width: 56px; height: 56px; border-radius: 50%; background: var(--accent); flex: none;
+    display: grid; place-items: center; transition: background .15s, transform .1s;
+  }
+  .play:hover { background: var(--accent-hover); }
+  .play:active { transform: scale(.96); }
+  .play svg { width: 22px; height: 22px; fill: var(--bg); }
+  .meta { min-width: 0; }
+  .title { font-size: 17px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .status { color: var(--muted); font-size: 12.5px; min-height: 18px; }
+  .status.error { color: var(--error); }
+
+  canvas#wave { display: block; width: 100%; height: 88px; margin-top: 14px; cursor: pointer; }
+  .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px;
+           padding: 2px 2px 0; font-variant-numeric: tabular-nums; }
+
+  .speed { text-align: center; padding: 18px 26px 20px; }
+  .seg { display: inline-flex; background: var(--panel-2); border-radius: 14px; padding: 3px; gap: 3px; }
+  .seg button { padding: 7px 0; width: 140px; border-radius: 11px; font-size: 13px; }
+  .seg button:hover { background: var(--border); }
+  .seg button.on { background: var(--accent); color: var(--bg); font-weight: 600; }
+  .value { font-size: 56px; font-weight: 700; letter-spacing: -1px; margin: 10px 0 0; line-height: 1.15;
+           font-variant-numeric: tabular-nums; color: var(--accent); transition: color .2s; }
+  .value.slow { color: var(--terracotta); }
+  .value.fast { color: var(--gold); }
+  .caption { color: var(--muted); font-size: 13px; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent;
+    cursor: pointer; margin: 14px 0 0; --p: 50%;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 8px; border-radius: 4px;
+    background: linear-gradient(to right, var(--accent-dim) var(--p), var(--border) var(--p));
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; margin-top: -7px;
+    background: var(--accent); box-shadow: 0 0 0 5px rgba(232, 162, 90, .14); transition: box-shadow .15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 7px rgba(232, 162, 90, .2); }
+  input[type=range]::-moz-range-track { height: 8px; border-radius: 4px; background: var(--border); }
+  input[type=range]::-moz-range-progress { height: 8px; border-radius: 4px; background: var(--accent-dim); }
+  input[type=range]::-moz-range-thumb {
+    width: 22px; height: 22px; border: 0; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 5px rgba(232, 162, 90, .14);
+  }
+  .range-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 11.5px; }
+
+  .presets { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; }
+  .presets button {
+    min-width: 64px; padding: 5px 12px; border-radius: 999px; font-size: 12.5px;
+    background: var(--panel-2); border: 1px solid var(--border); font-variant-numeric: tabular-nums;
+  }
+  .presets button:hover { background: var(--border); }
+  .presets button.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+
+  footer { display: flex; align-items: center; gap: 14px; padding: 4px 6px; color: var(--muted); font-size: 12px; }
+  footer .keys { margin-right: auto; }
+  footer .vol { display: flex; align-items: center; gap: 10px; }
+  footer .vol input { width: 150px; margin: 0; }
+  kbd { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 5px; padding: 0 5px; }
+
+  .overlay {
+    position: fixed; inset: 0; display: none; place-items: center; z-index: 10;
+    background: rgba(21, 17, 14, .86); backdrop-filter: blur(3px);
+  }
+  .overlay.show { display: grid; }
+  .overlay .box {
+    border: 2px dashed var(--accent); border-radius: 24px; padding: 48px 64px; text-align: center;
+    font-size: 20px; font-weight: 600;
+  }
+  .overlay .box small { display: block; color: var(--muted); font-size: 13px; font-weight: 400; margin-top: 6px; }
+  .overlay.off .box { border-color: var(--border); }
+
+  @media (max-width: 640px) {
+    .seg button { width: auto; padding: 7px 12px; }
+    .value { font-size: 44px; }
+    .logo { font-size: 24px; }
+    header .ghost { padding: 9px 8px; }
+    footer { flex-wrap: wrap; }
+    footer .keys { display: none; }
+    footer .vol { margin-right: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">tempo<span>player</span></div>
+    <button class="ghost" id="cache" disabled>Кэш пуст</button>
+    <button class="soft" id="open">Открыть файл</button>
+    <input type="file" id="file" accept="audio/*,video/*,.mp3,.wav,.flac,.ogg,.m4a,.opus,.webm,.aac" hidden>
+  </header>
+
+  <div class="card">
+    <form class="src" id="src">
+      <input id="url" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Вставьте ссылку на YouTube и нажмите Enter">
+      <button class="primary" id="go" type="submit">Слушать</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="now">
+      <button class="play" id="play" aria-label="Play / Pause">
+        <svg viewBox="0 0 24 24" id="icon"><path d="M7 4.5v15l13-7.5z"/></svg>
+      </button>
+      <div class="meta">
+        <div class="title" id="title">Ничего не играет</div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+    <canvas id="wave"></canvas>
+    <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+  </div>
+
+  <div class="card speed">
+    <div class="seg" id="modes">
+      <button data-mode="vinyl">Пластинка</button>
+      <button data-mode="tempo">Только темп</button>
+      <button data-mode="pitch">Только тон</button>
+    </div>
+    <div class="value" id="value">1.00×</div>
+    <div class="caption" id="caption">оригинальная скорость</div>
+    <input type="range" id="slider">
+    <div class="range-labels"><span id="rmin"></span><span id="rmax"></span></div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <footer>
+    <div class="keys"><kbd>Пробел</kbd> пауза · <kbd>← →</kbd> скорость · <kbd>1 2 3</kbd> режим · <kbd>0</kbd> сброс</div>
+    <div class="vol">Громкость <input type="range" id="vol" min="0" max="1.2" step="0.01"></div>
+    <button class="ghost" id="quit">Выключить</button>
+  </footer>
+</div>
+
+<div class="overlay" id="drop"><div class="box">Отпустите файл<small>mp3, wav, flac, ogg, m4a…</small></div></div>
+<div class="overlay off" id="offline"><div class="box">Плеер выключен<small>Запустите main.py снова и обновите страницу</small></div></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const SPEED_PRESETS = [0.70, 0.80, 0.90, 1.00, 1.15, 1.25, 1.35];
+const SEMI_PRESETS = [-5, -3, -2, 0, 2, 3, 5];
+const ICON_PLAY = '<path d="M7 4.5v15l13-7.5z"/>';
+const ICON_PAUSE = '<rect x="5.5" y="4.5" width="4.5" height="15" rx="1.2"/><rect x="14" y="4.5" width="4.5" height="15" rx="1.2"/>';
+
+let S = null;                // последнее состояние с сервера
+let recvAt = 0;
+let synced = false;
+const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volume: 0.9 };
+let peaks = [], peaksId = -1;
+let dragFrac = null, hoverFrac = null;
+let localPlaying = null, localPlayingUntil = 0;
+
+// ---------------------------------------------------------------- сеть
+async function post(url, data) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                               body: JSON.stringify(data) });
+  return r.json();
+}
+// ползунки шлют только последнее значение и строго по очереди
+const pending = new Map();
+let sending = false;
+async function send(action, value) {
+  pending.set(action, value);
+  if (sending) return;
+  sending = true;
+  while (pending.size) {
+    const [a, v] = pending.entries().next().value;
+    pending.delete(a);
+    try { await post('/api/control', { action: a, value: v }); } catch (e) { /* сервер выключен */ }
+  }
+  sending = false;
+}
+const act = (action, value) => post('/api/control', { action, value }).catch(() => {});
+
+async function poll() {
+  try {
+    const r = await fetch('/api/state');
+    S = await r.json();
+    recvAt = performance.now();
+    $('#offline').classList.remove('show');
+    onState();
+  } catch (e) {
+    $('#offline').classList.add('show');
+  }
+  setTimeout(poll, 120);
+}
+
+function onState() {
+  if (!synced) {
+    Object.assign(ui, { mode: S.mode, speed: S.speed, semi: S.semi, volume: S.volume });
+    $('#vol').value = ui.volume; paintRange($('#vol'));
+    renderMode();
+    synced = true;
+  }
+  $('#title').textContent = S.title || 'Ничего не играет';
+  document.title = S.title ? `${S.title} · tempo player` : 'tempo player';
+  const st = $('#status');
+  st.textContent = S.status || (S.loaded ? 'Пробел — пауза · файл можно просто перетащить в окно' :
+                                           'Откройте файл, перетащите его сюда или вставьте ссылку');
+  st.classList.toggle('error', !!S.error);
+  $('#go').disabled = S.busy;
+  $('#go').textContent = S.busy ? '…' : 'Слушать';
+  const mb = S.cache_mb;
+  $('#cache').disabled = mb < 0.5 || S.busy;
+  $('#cache').textContent = mb >= 0.5 ? `Очистить кэш · ${Math.round(mb)} МБ` : 'Кэш пуст';
+  $('#dur').textContent = fmt(S.duration);
+  if (S.track_id !== peaksId) loadPeaks();
+}
+
+async function loadPeaks() {
+  const r = await (await fetch('/api/peaks')).json();
+  peaks = r.peaks; peaksId = r.track_id;
+}
+
+// ---------------------------------------------------------------- скорость
+function semiWord(n) {
+  n = Math.abs(n);
+  if (n % 10 === 1 && n % 100 !== 11) return 'полутон';
+  if (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) return 'полутона';
+  return 'полутонов';
+}
+
+function renderMode() {
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === ui.mode));
+  const s = $('#slider');
+  if (ui.mode === 'pitch') {
+    Object.assign(s, { min: -12, max: 12, step: 1 }); s.value = ui.semi;
+    $('#rmin').textContent = '−12'; $('#rmax').textContent = '+12';
+  } else {
+    Object.assign(s, { min: 0.5, max: 2, step: 0.01 }); s.value = ui.speed;
+    $('#rmin').textContent = '0.5×'; $('#rmax').textContent = '2.0×';
+  }
+  const vals = ui.mode === 'pitch' ? SEMI_PRESETS : SPEED_PRESETS;
+  $('#presets').innerHTML = '';
+  for (const v of vals) {
+    const b = document.createElement('button');
+    b.textContent = ui.mode === 'pitch' ? (v > 0 ? `+${v}` : v < 0 ? `−${-v}` : '0') : `${v.toFixed(2)}×`;
+    b.dataset.v = v;
+    b.onclick = () => setValue(v);
+    $('#presets').append(b);
+  }
+  renderValue();
+}
+
+function renderValue() {
+  const val = $('#value');
+  let text, cap, cur, dir;
+  if (ui.mode === 'pitch') {
+    cur = ui.semi; dir = Math.sign(cur);
+    text = cur > 0 ? `+${cur}` : cur < 0 ? `−${-cur}` : '0';
+    cap = cur === 0 ? 'оригинальный тон' : `${semiWord(cur)} ${cur > 0 ? 'выше' : 'ниже'} · темп тот же`;
+  } else {
+    cur = ui.speed; dir = Math.sign(Math.round((cur - 1) * 100));
+    text = `${cur.toFixed(2)}×`;
+    const word = dir > 0 ? 'быстрее' : 'медленнее';
+    cap = dir === 0 ? 'оригинальная скорость'
+        : ui.mode === 'vinyl' ? `${word} · голос ${dir > 0 ? 'выше' : 'ниже'}` : `${word} · тон тот же`;
+  }
+  val.textContent = text;
+  val.className = 'value' + (dir > 0 ? ' fast' : dir < 0 ? ' slow' : '');
+  $('#caption').textContent = cap;
+  document.querySelectorAll('#presets button').forEach(b =>
+    b.classList.toggle('on', Math.abs(parseFloat(b.dataset.v) - cur) < 1e-6));
+  paintRange($('#slider'));
+}
+
+function paintRange(el) {
+  const p = (el.value - el.min) / (el.max - el.min) * 100;
+  el.style.setProperty('--p', p + '%');
+}
+
+function setMode(m) { ui.mode = m; renderMode(); send('mode', m); }
+
+function setValue(v) {
+  if (ui.mode === 'pitch') {
+    ui.semi = Math.round(Math.min(12, Math.max(-12, v)));
+    $('#slider').value = ui.semi; send('semi', ui.semi);
+  } else {
+    ui.speed = Math.round(Math.min(2, Math.max(0.5, v)) * 100) / 100;
+    $('#slider').value = ui.speed; send('speed', ui.speed);
+  }
+  renderValue();
+}
+const nudge = (d) => setValue(ui.mode === 'pitch' ? ui.semi + d : ui.speed + 0.05 * d);
+
+function setVolume(v) {
+  ui.volume = Math.min(1.2, Math.max(0, v));
+  $('#vol').value = ui.volume; paintRange($('#vol')); send('volume', ui.volume);
+}
+
+// ---------------------------------------------------------------- плеер
+function toggle() {
+  if (!S || !S.loaded) return;
+  localPlaying = !playingNow(); localPlayingUntil = performance.now() + 400;
+  act('toggle');
+}
+function playingNow() {
+  return performance.now() < localPlayingUntil ? localPlaying : !!(S && S.playing);
+}
+function position() {
+  if (!S || !S.loaded) return 0;
+  let p = S.position;
+  if (S.playing && playingNow()) p += (performance.now() - recvAt) / 1000 * S.rate;
+  return Math.min(p, S.duration);
+}
+function fmt(sec) { sec = Math.floor(sec || 0); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
+
+// ---------------------------------------------------------------- волна
+const cv = $('#wave'), ctx = cv.getContext('2d');
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const cy = h / 2;
+  const css = getComputedStyle(document.documentElement);
+  const cAcc = css.getPropertyValue('--accent'), cIdle = css.getPropertyValue('--wave-idle');
+
+  if (!peaks.length) {
+    ctx.strokeStyle = cIdle; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(4, cy); ctx.lineTo(w - 4, cy); ctx.stroke();
+  } else {
+    const frac = dragFrac ?? (S && S.duration ? position() / S.duration : 0);
+    const BAR = 3, STEP = 5, count = Math.max(1, Math.floor((w - 4) / STEP));
+    const n = peaks.length, played = Math.floor(frac * count);
+    const hover = hoverFrac == null ? -1 : Math.floor(hoverFrac * count);
+    ctx.lineCap = 'round'; ctx.lineWidth = BAR;
+    for (let i = 0; i < count; i++) {
+      const a = Math.floor(i * n / count), b = Math.max(a + 1, Math.floor((i + 1) * n / count));
+      let m = 0; for (let k = a; k < b; k++) if (peaks[k] > m) m = peaks[k];
+      const bh = Math.max(1.5, Math.pow(m, 0.8) * (cy - 6));
+      const x = 4 + i * STEP + BAR / 2;
+      ctx.strokeStyle = i < played ? cAcc : cIdle;
+      ctx.globalAlpha = (hover >= 0 && i >= Math.min(hover, played) && i < Math.max(hover, played)) ? 0.6 : 1;
+      ctx.beginPath(); ctx.moveTo(x, cy - bh); ctx.lineTo(x, cy + bh); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  $('#pos').textContent = fmt(dragFrac != null && S ? dragFrac * S.duration : position());
+  $('#icon').innerHTML = playingNow() ? ICON_PAUSE : ICON_PLAY;
+  requestAnimationFrame(draw);
+}
+const fracAt = (e) => Math.min(1, Math.max(0, (e.clientX - cv.getBoundingClientRect().left - 4) / (cv.clientWidth - 8)));
+cv.addEventListener('pointerdown', (e) => { if (peaks.length) { dragFrac = fracAt(e); cv.setPointerCapture(e.pointerId); } });
+cv.addEventListener('pointermove', (e) => { hoverFrac = fracAt(e); if (dragFrac != null) dragFrac = hoverFrac; });
+cv.addEventListener('pointerleave', () => { hoverFrac = null; });
+cv.addEventListener('pointerup', (e) => {
+  if (dragFrac == null || !S) return;
+  const sec = fracAt(e) * S.duration;
+  S.position = sec; recvAt = performance.now();
+  dragFrac = null;
+  act('seek', sec);
+});
+
+// ---------------------------------------------------------------- загрузка
+async function upload(file) {
+  if (!file) return;
+  $('#status').textContent = 'Передаю файл…';
+  try {
+    await fetch('/api/upload', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file });
+  } catch (e) { /* статус покажет poll */ }
+}
+function loadUrl(url) {
+  url = (url || '').trim();
+  if (url) post('/api/url', { url }).catch(() => {});
+}
+
+$('#open').onclick = () => $('#file').click();
+$('#file').onchange = (e) => { upload(e.target.files[0]); e.target.value = ''; };
+$('#src').onsubmit = (e) => { e.preventDefault(); loadUrl($('#url').value); $('#url').blur(); };
+$('#cache').onclick = () => act('clear_cache');
+$('#quit').onclick = () => { act('quit'); setTimeout(() => $('#offline').classList.add('show'), 300); };
+$('#play').onclick = toggle;
+document.querySelectorAll('#modes button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+$('#slider').addEventListener('input', (e) => setValue(parseFloat(e.target.value)));
+$('#vol').addEventListener('input', (e) => setVolume(parseFloat(e.target.value)));
+
+// перетаскивание файлов в окно
+let dragDepth = 0;
+const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+addEventListener('dragenter', (e) => { if (hasFiles(e)) { dragDepth++; $('#drop').classList.add('show'); } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; $('#drop').classList.remove('show'); } });
+addEventListener('dragover', (e) => e.preventDefault());
+addEventListener('drop', (e) => {
+  e.preventDefault(); dragDepth = 0; $('#drop').classList.remove('show');
+  if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+  else loadUrl(e.dataTransfer.getData('text'));   // перетащили ссылку
+});
+
+// Ctrl+V с ссылкой в любом месте страницы
+addEventListener('paste', (e) => {
+  if (e.target.matches('input[type=text]')) return;
+  const t = e.clipboardData.getData('text');
+  if (/^(https?:\/\/|www\.|youtu)/i.test(t.trim())) { $('#url').value = t.trim(); loadUrl(t); }
+});
+
+// горячие клавиши
+addEventListener('keydown', (e) => {
+  if (e.target.matches('input[type=text]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  const map = {
+    ' ': toggle,
+    ArrowLeft: () => nudge(-1), ArrowRight: () => nudge(1),
+    ArrowUp: () => setVolume(ui.volume + 0.05), ArrowDown: () => setVolume(ui.volume - 0.05),
+    '0': () => setValue(ui.mode === 'pitch' ? 0 : 1),
+    '1': () => setMode('vinyl'), '2': () => setMode('tempo'), '3': () => setMode('pitch'),
+  };
+  if (map[k]) { e.preventDefault(); map[k](); }
+});
+
+renderMode();
+poll();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

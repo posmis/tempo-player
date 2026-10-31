@@ -167,6 +167,8 @@ def make_handler(ctl, server_ref, presence):
             try:
                 if action == "toggle":
                     ctl.toggle()
+                elif action == "loop":
+                    ctl.set_loop(value)
                 elif action == "seek":
                     ctl.seek(value)
                 elif action == "mode":

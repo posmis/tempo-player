@@ -77,6 +77,14 @@
   .play:hover { background: var(--accent-hover); }
   .play:active { transform: scale(.96); }
   .play svg { width: 22px; height: 22px; fill: var(--bg); }
+  .loop { flex: none; display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 14px 0 11px;
+          border-radius: 19px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted);
+          font-size: 13px; transition: background .15s, color .15s, border-color .15s; }
+  .loop:hover { color: var(--text); background: var(--border); }
+  .loop svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2;
+              stroke-linecap: round; stroke-linejoin: round; }
+  .loop.on { color: var(--bg); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .loop.on:hover { background: var(--accent-hover); }
   .meta { min-width: 0; }
   .title { font-size: 17px; font-weight: 650; }
   .author { font-size: 12.5px; color: var(--accent); font-weight: 600; min-height: 0; }
@@ -229,6 +237,10 @@
           <div class="title mq" id="title"><span></span></div>
           <div class="status" id="status"></div>
         </div>
+        <button class="loop" id="loop" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/><path d="M11.5 10l1.5-1v6"/></svg>
+          <span id="loopText"></span>
+        </button>
       </div>
       <canvas id="spec"></canvas>
       <canvas id="wave"></canvas>
@@ -301,7 +313,7 @@ const I18N = {
     s_size: 'Размер зала', s_mix: 'Сила', s_gain: 'Усиление', s_time: 'Задержка', s_feedback: 'Повторы',
     s_tone: 'Приглушение', s_crackle: 'Треск пластинки', u_db: 'дБ', u_ms: 'мс',
     keys: '<kbd>Пробел</kbd> пауза · <kbd>← →</kbd> скорость · <kbd>1 2 3</kbd> режим · <kbd>0</kbd> сброс',
-    volume: 'Громкость', quit: 'Выключить',
+    volume: 'Громкость', quit: 'Выключить', loop: 'Повтор', loop_on: 'Повтор трека включён — нажмите, чтобы выключить', loop_off: 'Повторять этот трек по кругу',
     recent: 'В кэше', clear: 'Очистить', hist_empty: 'Здесь появятся треки, скачанные с YouTube. Из кэша они открываются мгновенно.',
     today: 'сегодня', yesterday: 'вчера', days_ago: '{n} дн. назад',
     remove: 'Удалить из кэша', confirm_clear: 'Удалить из кэша все скачанные треки ({mb})?',
@@ -326,7 +338,7 @@ const I18N = {
     s_size: 'Room size', s_mix: 'Amount', s_gain: 'Boost', s_time: 'Delay', s_feedback: 'Repeats',
     s_tone: 'Muffle', s_crackle: 'Vinyl crackle', u_db: 'dB', u_ms: 'ms',
     keys: '<kbd>Space</kbd> pause · <kbd>← →</kbd> speed · <kbd>1 2 3</kbd> mode · <kbd>0</kbd> reset',
-    volume: 'Volume', quit: 'Quit',
+    volume: 'Volume', quit: 'Quit', loop: 'Repeat', loop_on: 'Repeat is on — click to turn off', loop_off: 'Play this track on repeat',
     recent: 'In cache', clear: 'Clear', hist_empty: 'Tracks downloaded from YouTube will show up here. They open instantly from the cache.',
     today: 'today', yesterday: 'yesterday', days_ago: '{n} days ago',
     remove: 'Remove from cache', confirm_clear: 'Delete all downloaded tracks from the cache ({mb})?',
@@ -348,6 +360,7 @@ function applyLang() {
   document.querySelectorAll('[data-i18n-html]').forEach(e => { e.innerHTML = t(e.dataset.i18nHtml); });
   document.querySelectorAll('[data-i18n-ph]').forEach(e => { e.placeholder = t(e.dataset.i18nPh); });
   document.querySelectorAll('#lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  renderLoop();
   renderMode();
   if (synced) buildFx();
   histKey = '';
@@ -380,7 +393,7 @@ const FX = [
 ];
 
 let S = null, recvAt = 0, synced = false;
-const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volPos: 0.5, fx: {} };
+const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volPos: 0.5, loop: false, fx: {} };
 let peaks = [], peaksId = -1;
 let dragFrac = null, hoverFrac = null;
 let localPlaying = null, localPlayingUntil = 0;
@@ -426,9 +439,9 @@ async function poll() {
 
 function onState() {
   if (!synced) {
-    Object.assign(ui, { mode: S.mode, speed: S.speed, semi: S.semi, volPos: ampToPos(S.volume), fx: S.fx });
+    Object.assign(ui, { mode: S.mode, speed: S.speed, semi: S.semi, volPos: ampToPos(S.volume), loop: S.loop, fx: S.fx });
     showVolume();
-    renderMode(); buildFx();
+    renderMode(); buildFx(); renderLoop();
     synced = true;
   }
   setMq($('#title'), S.title || t('title_none'));
@@ -678,6 +691,17 @@ function stopMq(box) { box.classList.remove('run'); }
 });
 addEventListener('resize', () => document.querySelectorAll('.mq').forEach(markCut));
 
+// ---------------------------------------------------------------- повтор
+function renderLoop() {
+  const b = $('#loop');
+  b.classList.toggle('on', ui.loop);
+  b.setAttribute('aria-pressed', String(ui.loop));
+  b.title = t(ui.loop ? 'loop_on' : 'loop_off');
+  $('#loopText').textContent = t('loop');
+}
+function toggleLoop() { ui.loop = !ui.loop; renderLoop(); send('loop', 'loop', ui.loop); }
+$('#loop').onclick = toggleLoop;
+
 // ---------------------------------------------------------------- плеер
 function toggle() {
   if (!S || !S.loaded) return;
@@ -816,8 +840,9 @@ addEventListener('paste', (e) => {
   if (/^(https?:\/\/|www\.|youtu)/i.test(t.trim())) { $('#url').value = t.trim(); loadUrl(t); }
 });
 addEventListener('keydown', (e) => {
-  if (e.target.matches('input[type=text]') || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.target.matches('input.thin') && e.key.startsWith('Arrow')) return;   // стрелки двигают ползунок эффекта
+  const tg = e.target instanceof Element ? e.target : document.body;
+  if (tg.matches('input[type=text]') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (tg.matches('input.thin') && e.key.startsWith('Arrow')) return;   // стрелки двигают ползунок эффекта
   const map = {
     ' ': toggle,
     ArrowLeft: () => nudge(-1), ArrowRight: () => nudge(1),

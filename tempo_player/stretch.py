@@ -17,6 +17,7 @@ class WSOLA:
         # периодическое окно Ханна: при перекрытии 50% сумма окон ровно 1
         self.win = np.hanning(frame + 1)[:-1].astype(np.float32)[:, None]
         self.factor = 1.0  # >1 быстрее, <1 медленнее
+        self.loop = False  # читать трек по кругу: конец склеивается с началом без паузы
         self.src = None
         self.apos = 0.0
 
@@ -31,12 +32,14 @@ class WSOLA:
 
     @property
     def done(self):
-        return self.apos >= len(self.src)
+        return not self.loop and self.apos >= len(self.src)
 
     def _get(self, start, length):
         n = len(self.src)
         if 0 <= start and start + length <= n:
             return self.src[start:start + length]
+        if self.loop:  # за краем трека — его начало (или конец, если слева)
+            return self.src[np.arange(start, start + length) % n]
         out = np.zeros((length, self.src.shape[1]), dtype=np.float32)
         a, b = max(start, 0), min(start + length, n)
         if b > a:
@@ -73,4 +76,7 @@ class WSOLA:
         self.ola[self.H:] = 0.0
         self.prev = start
         self.apos += self.H * self.factor
+        if self.loop and self.apos >= len(self.src):
+            self.apos -= len(self.src)
+            self.prev -= len(self.src)  # чтобы поиск склейки продолжился через стык
         return out

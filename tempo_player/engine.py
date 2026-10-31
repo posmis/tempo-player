@@ -27,6 +27,7 @@ class Engine:
         self.pitch = 1.0
         self.volume = 10 ** (-36 / 20)  # множитель амплитуды; −36 дБ = 50% на ползунке
         self.playing = False
+        self.loop = False  # повтор трека: в конце сразу начинаем сначала
         self.lock = threading.Lock()
         self.stream = None
         self.stretch = WSOLA()
@@ -122,6 +123,7 @@ class Engine:
             # WSOLA должна выдать звук в темпе tempo/pitch — ресемплер потом
             # ускорит его в pitch раз, и в сумме получится нужный темп
             self.stretch.factor = self.tempo / p1
+            self.stretch.loop = self.loop
             need = int(idx[-1]) + resample.kernel_reach(ratio) + 1
             chunks, have = [self._buf], len(self._buf)
             while have < need:

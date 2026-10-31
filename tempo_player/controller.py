@@ -62,6 +62,9 @@ class Controller:
         if self.engine.loaded:
             self.engine.playing = not self.engine.playing
 
+    def set_loop(self, on):
+        self.engine.loop = bool(on)
+
     def seek(self, sec):
         self.engine.seek(float(sec))
 
@@ -180,6 +183,7 @@ class Controller:
             "t": time.time(),
             "loaded": e.loaded,
             "playing": e.playing,
+            "loop": e.loop,
             "position": e.position,
             "duration": e.duration,
             "rate": e.tempo,

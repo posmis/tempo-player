@@ -168,6 +168,11 @@ class App(ctk.CTk):
         ctk.CTkButton(head, text="Открыть файл", command=self.open_file, width=130, height=36,
                       corner_radius=12, font=(F, 13), fg_color=T.PANEL_2, hover_color=T.BORDER,
                       text_color=T.TEXT, border_width=1, border_color=T.BORDER).pack(side="right")
+        self.cache_btn = ctk.CTkButton(head, text="", command=self.clear_cache, width=150, height=36,
+                                       corner_radius=12, font=(F, 12), fg_color="transparent",
+                                       hover_color=T.PANEL_2, text_color=T.MUTED)
+        self.cache_btn.pack(side="right", padx=8)
+        self._update_cache_btn()
 
         # --- ссылка на YouTube
         src = self._card(pady=(0, 12))
@@ -410,6 +415,9 @@ class App(ctk.CTk):
             return
 
         def job():
+            if sources.cached(url):
+                self.events.put(("status", "Из кэша, без скачивания…"))
+
             def progress(frac):
                 self.events.put(("status", f"Скачиваю с YouTube…  {int(frac * 100)}%"))
             path, title = sources.download_youtube(url, progress)
@@ -455,8 +463,21 @@ class App(ctk.CTk):
             self.track_lbl.configure(text=title[:70])
             self.dur_lbl.configure(text=fmt_time(self.engine.duration))
             self.wave.set_peaks(self.engine.peaks)
+            self._update_cache_btn()
             self._status("Пробел — пауза  ·  ← → — скорость")
             self.engine.playing = True
+
+    def _update_cache_btn(self):
+        mb = sources.cache_size() / 1024 / 1024
+        self.cache_btn.configure(text=f"Очистить кэш · {mb:.0f} МБ" if mb >= 0.5 else "Кэш пуст",
+                                 state="normal" if mb >= 0.5 else "disabled")
+
+    def clear_cache(self):
+        if self.busy:
+            return  # не удаляем файл, который сейчас скачивается
+        sources.clear_cache()
+        self._update_cache_btn()
+        self._status("Кэш очищен")
 
     def _status(self, text, error=False):
         self.status_lbl.configure(text=text, text_color=T.ERROR if error else T.MUTED)

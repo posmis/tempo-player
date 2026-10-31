@@ -98,7 +98,7 @@ class Controller:
             self._set_status("preparing")
             return sources.decode(path), title
 
-        vid = sources.video_id(url)
+        vid = sources.youtube_id(url)
         return self._start(job, "searching", video_id=vid)
 
     def _start(self, job, status, video_id=None):
@@ -109,6 +109,7 @@ class Controller:
         self._set_status(status)
 
         def run():
+            # noinspection PyBroadException
             try:
                 (data, sr), title = job()
                 self.engine.load(data, sr)
@@ -121,7 +122,7 @@ class Controller:
                     self.history.add(video_id, title, len(data) / sr)  # полное название, как на YouTube
                 self._set_status(None)
                 self.engine.playing = True
-            except Exception as e:  # noqa: BLE001 — любую ошибку показываем пользователю
+            except Exception as e:  # любую ошибку показываем пользователю, а не роняем поток
                 self._set_status("error", error=True, msg=str(e)[:160] or e.__class__.__name__)
             finally:
                 self.busy = False
@@ -149,13 +150,15 @@ class Controller:
         self.history.remove(video_id)
         return True
 
+    # noinspection SpellCheckingInspection
     def library(self):
         """Треки в кэше, свежие сверху. Подробности — из истории прослушивания."""
         meta = self.history.by_id()
         items = []
         for f in sources.cached_tracks():
             h = meta.get(f["id"], {})
-            author, name = sources.split_title(**{**f, "title": f["title"] if f["title"] != "YouTube" else h.get("title", "YouTube")})
+            title = f["title"] if f["title"] != "YouTube" else h.get("title", "YouTube")
+            author, name = sources.split_title(**{**f, "title": title})
             items.append({
                 "id": f["id"], "url": f["url"],
                 "author": author, "name": name,

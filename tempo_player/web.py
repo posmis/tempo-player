@@ -78,6 +78,8 @@ def make_handler(ctl, server_ref, presence):
             if self.headers.get("Host") not in hosts:
                 return False
             origin = self.headers.get("Origin")
+            # это свой компьютер (127.0.0.1), https тут не бывает
+            # noinspection HttpUrlsUsage
             return origin is None or origin in {f"http://{h}" for h in hosts}
 
         def _send(self, code, body, ctype="application/json; charset=utf-8"):
@@ -216,6 +218,7 @@ def run(path=None, port=8765, open_browser=True):
     server.daemon_threads = True
     server_ref[0] = server
 
+    # noinspection HttpUrlsUsage
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"tempo player: {url}")
     print("Остановить: закройте вкладку, кнопка «Выключить» или Stop в PyCharm")

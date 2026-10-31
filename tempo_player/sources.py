@@ -5,7 +5,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 
 import numpy as np
@@ -27,8 +26,8 @@ def decode(path):
         data, sr = sf.read(path, dtype="float32", always_2d=True)
         if len(data):
             return data, sr
-    except Exception:
-        pass
+    except (RuntimeError, OSError, ValueError, TypeError):
+        pass  # soundfile не знает этот формат
     # m4a / webm / opus и всё прочее — через ffmpeg
     proc = subprocess.run(
         [ffmpeg_exe(), "-v", "error", "-i", path, "-f", "f32le", "-ac", "2",
@@ -40,6 +39,7 @@ def decode(path):
     return np.frombuffer(proc.stdout, dtype=np.float32).reshape(-1, 2).copy(), FFMPEG_SR
 
 
+# noinspection HttpUrlsUsage,SpellCheckingInspection
 def looks_like_url(text):
     t = text.strip().lower()
     return t.startswith(("http://", "https://", "www.", "youtu", "m.youtube", "music.youtube"))
@@ -58,29 +58,29 @@ def _titles():
         return {}
 
 
-def meta(video_id):
+def meta(vid):
     """Сведения о скачанном видео: {title, channel, artist, track} (что известно)."""
-    m = _titles().get(video_id)
+    m = _titles().get(vid)
     if isinstance(m, str):  # старый формат — только название
         return {"title": m}
     return m or {}
 
 
-def _remember_title(video_id, title, **extra):
+def _remember_title(vid, title, **extra):
     titles = _titles()
-    titles[video_id] = {"title": title, **{k: v for k, v in extra.items() if v}}
+    titles[vid] = {"title": title, **{k: v for k, v in extra.items() if v}}
     with open(_TITLES, "w", encoding="utf-8") as f:
         json.dump(titles, f, ensure_ascii=False)
 
 
-def video_id(url):
+def youtube_id(url):
     m = _ID_RE.search(url or "")
     return m.group(1) if m else None
 
 
 def cached(url):
     """Если трек уже скачан — (путь, название), иначе None. Без обращения к сети."""
-    vid = video_id(url)
+    vid = youtube_id(url)
     if not vid:
         return None
     for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), vid + ".*")):
@@ -89,6 +89,7 @@ def cached(url):
     return None
 
 
+# noinspection SpellCheckingInspection
 def cached_tracks():
     """Все треки, которые уже лежат в кэше: [{id, url, title, size, mtime}]."""
     out = []
@@ -97,7 +98,9 @@ def cached_tracks():
             continue
         vid, ext = os.path.splitext(os.path.basename(path))
         # недокачанные (id.webm.part), служебные .json и чужие файлы пропускаем
-        if ext in (".part", ".ytdl", ".json", ".tmp") or not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+        if ext in (".part", ".ytdl", ".json", ".tmp"):
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
             continue
         st = os.stat(path)
         out.append({"id": vid, "url": f"https://www.youtube.com/watch?v={vid}",
@@ -105,8 +108,8 @@ def cached_tracks():
     return out
 
 
-def delete_cached(video_id):
-    for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), glob.escape(video_id) + ".*")):
+def delete_cached(vid):
+    for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), glob.escape(vid) + ".*")):
         if not path.endswith(".json"):
             try:
                 os.remove(path)
@@ -151,6 +154,7 @@ def clear_cache():
 
 
 # ---------------------------------------------------------------- загрузка
+# noinspection SpellCheckingInspection
 def download_youtube(url, progress=None):
     """Скачивает аудиодорожку в кэш (или берёт из кэша). Возвращает (путь, название)."""
     hit = cached(url)
@@ -158,6 +162,7 @@ def download_youtube(url, progress=None):
         return hit
 
     import yt_dlp
+    from yt_dlp.utils import DownloadError
 
     os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -177,16 +182,17 @@ def download_youtube(url, progress=None):
         "ffmpeg_location": ffmpeg_exe(),
     }
     try:
+        # noinspection PyTypeChecker
         with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url.strip(), download=True)
-            if "entries" in info:
-                info = info["entries"][0]
+            info = dict(ydl.extract_info(url.strip(), download=True))
+            if info.get("entries"):  # ссылка на плейлист — берём первое видео
+                info = dict(info["entries"][0])
             title = info.get("title") or "YouTube"
             artists = info.get("artists") or ([info["artist"]] if info.get("artist") else [])
             _remember_title(info["id"], title, channel=info.get("channel") or info.get("uploader"),
                             artist=", ".join(artists), track=info.get("track"))
             return ydl.prepare_filename(info), title
-    except yt_dlp.utils.DownloadError as e:
-        # «ERROR: [youtube] abc: Video unavailable; please report…» -> «Video unavailable»
+    except DownloadError as e:
+        # «ERROR: [сайт] id: Video unavailable; please report…» -> «Video unavailable»
         msg = str(e).replace("ERROR: ", "").split("; please report")[0]
         raise RuntimeError(msg.split(": ", 1)[-1] if msg.startswith("[") else msg) from None

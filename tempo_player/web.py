@@ -60,6 +60,8 @@ def make_handler(ctl, server_ref):
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             if path == "/api/state":
                 return self._send(200, ctl.state())
+            if path == "/api/history":
+                return self._send(200, {"rev": ctl.history.rev, "items": ctl.history.items()})
             if path == "/api/peaks":
                 peaks = ctl.engine.peaks
                 data = [] if peaks is None else [round(float(p), 3) for p in peaks]
@@ -111,6 +113,12 @@ def make_handler(ctl, server_ref):
                     ctl.set_semi(value)
                 elif action == "volume":
                     ctl.set_volume(value)
+                elif action == "fx":
+                    ctl.set_fx(value["name"], value["key"], value["val"])
+                elif action == "history_remove":
+                    ctl.history.remove(str(value))
+                elif action == "history_clear":
+                    ctl.history.clear()
                 elif action == "clear_cache":
                     ctl.clear_cache()
                 elif action == "quit":
@@ -119,7 +127,7 @@ def make_handler(ctl, server_ref):
                     return None
                 else:
                     return self._send(400, {"error": "unknown action"})
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, KeyError):
                 return self._send(400, {"error": "bad value"})
             self._send(200, ctl.state())
 

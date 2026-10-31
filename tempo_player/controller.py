@@ -7,6 +7,7 @@ import threading
 import time
 
 from . import sources
+from .history import History
 from .engine import Engine
 
 SPEED_MIN, SPEED_MAX = 0.5, 2.0
@@ -25,6 +26,8 @@ class Controller:
         self.error = False
         self.busy = False
         self.track_id = 0
+        self.current_id = None  # id видео YouTube, которое сейчас загружено
+        self.history = History()
         self._lock = threading.Lock()
         self._apply()
 
@@ -75,7 +78,7 @@ class Controller:
                     except OSError:
                         pass
 
-        return self._start(job, "Загружаю…")
+        return self._start(job, "Загружаю…", video_id=None)
 
     def load_url(self, url):
         url = (url or "").strip()
@@ -94,9 +97,10 @@ class Controller:
             self._set_status("Подготавливаю звук…")
             return sources.decode(path), title
 
-        return self._start(job, "Ищу видео…")
+        vid = sources.video_id(url)
+        return self._start(job, "Ищу видео…", video_id=vid)
 
-    def _start(self, job, status):
+    def _start(self, job, status, video_id=None):
         with self._lock:
             if self.busy:
                 return False
@@ -108,7 +112,10 @@ class Controller:
                 (data, sr), title = job()
                 self.engine.load(data, sr)
                 self.title = title
+                self.current_id = video_id
                 self.track_id += 1
+                if video_id:
+                    self.history.add(video_id, title, len(data) / sr)
                 self._set_status("")
                 self.engine.playing = True
             except Exception as e:  # noqa: BLE001 — любую ошибку показываем пользователю
@@ -127,8 +134,13 @@ class Controller:
         if self.busy:
             return False
         sources.clear_cache()
+        self.history.touch()
         self._set_status("Кэш очищен")
         return True
+
+    # ------------------------------------------------------------ эффекты
+    def set_fx(self, name, key, value):
+        self.engine.fx.set(name, key, value)
 
     # ------------------------------------------------------------ снимок
     def state(self):
@@ -150,6 +162,9 @@ class Controller:
             "busy": self.busy,
             "track_id": self.track_id,
             "cache_mb": round(sources.cache_size() / 1024 / 1024, 1),
+            "current_id": self.current_id,
+            "history_rev": self.history.rev,
+            "fx": self.engine.fx.snapshot(),
         }
 
     def close(self):

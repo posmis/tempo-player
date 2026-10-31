@@ -8,6 +8,7 @@
 import threading
 
 import numpy as np
+from .effects import Effects
 from .stretch import WSOLA
 
 BLOCK = 1024
@@ -26,6 +27,7 @@ class Engine:
         self.lock = threading.Lock()
         self.stream = None
         self.stretch = WSOLA()
+        self.fx = Effects()
         self._buf = np.zeros((0, 2), dtype=np.float32)
         self._rp = 0.0
         self._cur_pitch = 1.0
@@ -107,7 +109,8 @@ class Engine:
             if self.stretch.done:
                 self.playing = False
                 self._seek(0.0)
-        return out
+            sr = self.sr
+        return self.fx.process(out, sr)
 
     def _callback(self, outdata, frames, time, status):
         outdata[:] = self.render(frames)

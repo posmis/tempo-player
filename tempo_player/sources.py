@@ -65,12 +65,16 @@ def _remember_title(video_id, title):
         json.dump(titles, f, ensure_ascii=False)
 
 
+def video_id(url):
+    m = _ID_RE.search(url or "")
+    return m.group(1) if m else None
+
+
 def cached(url):
     """Если трек уже скачан — (путь, название), иначе None. Без обращения к сети."""
-    m = _ID_RE.search(url)
-    if not m:
+    vid = video_id(url)
+    if not vid:
         return None
-    vid = m.group(1)
     for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), vid + ".*")):
         if not path.endswith((".part", ".ytdl", ".json")):
             return path, _titles().get(vid, "YouTube")

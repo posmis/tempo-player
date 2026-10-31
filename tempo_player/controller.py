@@ -46,7 +46,7 @@ class Controller:
         self._apply()
 
     def set_volume(self, v):
-        self.engine.volume = min(1.2, max(0.0, float(v)))
+        self.engine.volume = min(1.0, max(0.0, float(v)))
 
     def _apply(self):
         if self.mode == "vinyl":

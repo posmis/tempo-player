@@ -247,10 +247,10 @@ class App(ctk.CTk):
         foot.pack(fill="x", padx=28, pady=(0, 16))
         ctk.CTkLabel(foot, text="1 2 3 — режим  ·  0 — сброс  ·  ↑ ↓ — громкость",
                      font=(F, 11), text_color=T.MUTED).pack(side="left")
-        self.vol = ctk.CTkSlider(foot, from_=0, to=1.2, width=160, height=18, command=self._on_volume,
+        self.vol = ctk.CTkSlider(foot, from_=0, to=1, width=160, height=18, command=self._on_volume,
                                  fg_color=T.BORDER, progress_color=T.ACCENT_DIM,
                                  button_color=T.ACCENT, button_hover_color=T.ACCENT_HOVER)
-        self.vol.set(self.engine.volume)
+        self.vol.set(self.engine.volume ** (1 / 3))
         self.vol.pack(side="right")
         ctk.CTkLabel(foot, text="Громкость", font=(F, 12), text_color=T.MUTED).pack(side="right", padx=8)
 
@@ -378,21 +378,23 @@ class App(ctk.CTk):
         self.bind("<space>", guard(self.toggle))
         self.bind("<Left>", guard(lambda: self._nudge(-1)))
         self.bind("<Right>", guard(lambda: self._nudge(+1)))
-        self.bind("<Up>", guard(lambda: self._set_volume(self.engine.volume + 0.05)))
-        self.bind("<Down>", guard(lambda: self._set_volume(self.engine.volume - 0.05)))
+        self.bind("<Up>", guard(lambda: self._set_volume(self.vol.get() + 0.05)))
+        self.bind("<Down>", guard(lambda: self._set_volume(self.vol.get() - 0.05)))
         self.bind("<Key-0>", guard(lambda: self.set_value(0 if self.mode == "pitch" else 1.0)))
         for i, (key, _) in enumerate(MODES, start=1):
             self.bind(f"<Key-{i}>", guard(lambda k=key: self._set_mode(k)))
         # клик мимо поля ввода снимает с него фокус
         self.bind_all("<Button-1>", lambda e: None if isinstance(e.widget, tk.Entry) else self.focus_set(), add="+")
 
-    def _on_volume(self, v):
-        self.engine.volume = float(v)
+    # Ползунок громкости — кубическая шкала: слух воспринимает громкость логарифмически,
+    # и при линейной шкале вся полезная часть сжимается в начало ползунка.
+    def _on_volume(self, pos):
+        self.engine.volume = float(pos) ** 3
 
-    def _set_volume(self, v):
-        v = min(1.2, max(0.0, v))
-        self.vol.set(v)
-        self.engine.volume = v
+    def _set_volume(self, pos):
+        pos = min(1.0, max(0.0, pos))
+        self.vol.set(pos)
+        self.engine.volume = pos ** 3
 
     # ------------------------------------------------------------ загрузка
     def open_file(self):

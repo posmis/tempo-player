@@ -7,6 +7,7 @@ import json
 import os
 import re
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
@@ -19,7 +20,53 @@ UPLOAD_DIR = os.path.join(sources.CACHE_DIR, "uploads")
 MAX_UPLOAD = 1024 * 1024 * 1024  # 1 ГБ
 
 
-def make_handler(ctl, server_ref):
+class Presence:
+    """Следит, открыта ли страница. Закрыли последнюю вкладку — выключаемся.
+
+    Каждая вкладка шлёт свой X-Client с каждым запросом, а при закрытии —
+    /api/bye. Обновление страницы (F5) успевает переподключиться за GRACE секунд.
+    Если браузер упал и «пока» не прислал — выключаемся после STALE секунд тишины
+    (свёрнутая вкладка может опрашивать сервер всего раз в минуту).
+    """
+
+    GRACE = 2.5
+    STALE = 180
+
+    def __init__(self, on_empty):
+        self.on_empty = on_empty
+        self.clients = {}
+        self.seen_any = False
+        self.empty_since = None
+        self.lock = threading.Lock()
+        threading.Thread(target=self._watch, daemon=True).start()
+
+    def touch(self, cid):
+        with self.lock:
+            self.clients[cid] = time.monotonic()
+            self.seen_any = True
+            self.empty_since = None
+
+    def bye(self, cid):
+        with self.lock:
+            self.clients.pop(cid, None)
+
+    def _watch(self):
+        while True:
+            time.sleep(0.5)
+            now = time.monotonic()
+            with self.lock:
+                self.clients = {c: t for c, t in self.clients.items() if now - t < self.STALE}
+                if not self.seen_any or self.clients:
+                    self.empty_since = None
+                    continue
+                self.empty_since = self.empty_since or now
+                if now - self.empty_since < self.GRACE:
+                    continue
+            self.on_empty()
+            return
+
+
+def make_handler(ctl, server_ref, presence):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass  # не засоряем консоль запросами
@@ -51,9 +98,15 @@ def make_handler(ctl, server_ref):
                 return {}
 
         # -------------------------------------------------- GET
+        def _touch(self):
+            cid = self.headers.get("X-Client")
+            if cid:
+                presence.touch(cid[:64])
+
         def do_GET(self):
             if not self._allowed():
                 return self._send(403, {"error": "forbidden"})
+            self._touch()
             path = self.path.split("?")[0]
             if path == "/":
                 with open(os.path.join(STATIC, "index.html"), "rb") as f:
@@ -75,7 +128,13 @@ def make_handler(ctl, server_ref):
         def do_POST(self):
             if not self._allowed():
                 return self._send(403, {"error": "forbidden"})
+            self._touch()
             path = self.path.split("?")[0]
+
+            if path == "/api/bye":  # вкладку закрыли (navigator.sendBeacon)
+                n = int(self.headers.get("Content-Length") or 0)
+                presence.bye(self.rfile.read(min(n, 64)).decode(errors="ignore"))
+                return self._send(200, {"ok": True})
 
             if path == "/api/upload":
                 n = int(self.headers.get("Content-Length") or 0)
@@ -140,7 +199,12 @@ def make_handler(ctl, server_ref):
 def run(path=None, port=8765, open_browser=True):
     ctl = Controller()
     server_ref = [None]
-    handler = make_handler(ctl, server_ref)
+
+    def on_empty():
+        print("Страница закрыта — выключаюсь")
+        server_ref[0].shutdown()
+
+    handler = make_handler(ctl, server_ref, Presence(on_empty))
 
     server = None
     for p in range(port, port + 20):  # если порт занят — берём следующий
@@ -156,7 +220,7 @@ def run(path=None, port=8765, open_browser=True):
 
     url = f"http://127.0.0.1:{server.server_address[1]}/"
     print(f"tempo player: {url}")
-    print("Остановить: кнопка «Выключить» на странице или Ctrl+C / Stop в PyCharm")
+    print("Остановить: закройте вкладку, кнопка «Выключить» или Stop в PyCharm")
     if path:
         ctl.load_path(path)
     if open_browser:

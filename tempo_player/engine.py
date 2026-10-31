@@ -24,7 +24,7 @@ class Engine:
         self.peaks = None
         self.tempo = 1.0
         self.pitch = 1.0
-        self.volume = 0.9
+        self.volume = 0.6 ** 3  # громкость — множитель амплитуды; ползунок = корень кубический
         self.playing = False
         self.lock = threading.Lock()
         self.stream = None

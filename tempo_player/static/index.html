@@ -167,7 +167,8 @@
   footer { display: flex; align-items: center; gap: 14px; padding: 4px 6px; color: var(--muted); font-size: 12px; }
   footer .keys { margin-right: auto; }
   footer .vol { display: flex; align-items: center; gap: 10px; }
-  footer .vol input { width: 150px; margin: 0; }
+  footer .vol input { width: 170px; margin: 0; }
+  footer .vol output { width: 34px; color: var(--text); font-variant-numeric: tabular-nums; }
   kbd { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; }
 
   .overlay { position: fixed; inset: 0; display: none; place-items: center; z-index: 10; background: rgba(21, 17, 14, .86); backdrop-filter: blur(3px); }
@@ -248,7 +249,7 @@
 
     <footer>
       <div class="keys" data-i18n-html="keys"></div>
-      <div class="vol"><span data-i18n="volume"></span> <input type="range" id="vol" class="thin" min="0" max="1.2" step="0.01"></div>
+      <div class="vol"><span data-i18n="volume"></span> <input type="range" id="vol" class="thin" min="0" max="1" step="0.01"><output id="volv"></output></div>
       <button class="ghost" id="quit" data-i18n="quit"></button>
     </footer>
   </main>
@@ -366,15 +367,19 @@ const FX = [
 ];
 
 let S = null, recvAt = 0, synced = false;
-const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volume: 0.9, fx: {} };
+const ui = { mode: 'vinyl', speed: 1.0, semi: 0, volPos: 0.6, fx: {} };
 let peaks = [], peaksId = -1;
 let dragFrac = null, hoverFrac = null;
 let localPlaying = null, localPlayingUntil = 0;
 let hist = [], histRev = -1, histKey = '';
 
 // ---------------------------------------------------------------- сеть
+// у каждой вкладки свой id: сервер выключается, когда закрыта последняя
+const CLIENT = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 64);
+const api = (url, opts = {}) => fetch(url, { ...opts, headers: { ...(opts.headers || {}), 'X-Client': CLIENT } });
+addEventListener('pagehide', () => navigator.sendBeacon('/api/bye', CLIENT));
 async function post(url, data) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const r = await api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
   return r.json();
 }
 // ползунки шлют только последнее значение и строго по очереди
@@ -395,7 +400,7 @@ const act = (action, value) => post('/api/control', { action, value }).catch(() 
 
 async function poll() {
   try {
-    const r = await fetch('/api/state');
+    const r = await api('/api/state');
     S = await r.json();
     recvAt = performance.now();
     $('#offline').classList.remove('show');
@@ -408,8 +413,8 @@ async function poll() {
 
 function onState() {
   if (!synced) {
-    Object.assign(ui, { mode: S.mode, speed: S.speed, semi: S.semi, volume: S.volume, fx: S.fx });
-    $('#vol').value = ui.volume; paintRange($('#vol'));
+    Object.assign(ui, { mode: S.mode, speed: S.speed, semi: S.semi, volPos: Math.cbrt(S.volume), fx: S.fx });
+    showVolume();
     renderMode(); buildFx();
     synced = true;
   }
@@ -430,7 +435,7 @@ function onState() {
 }
 
 async function loadPeaks() {
-  const r = await (await fetch('/api/peaks')).json();
+  const r = await (await api('/api/peaks')).json();
   peaks = r.peaks; peaksId = r.track_id;
 }
 
@@ -499,9 +504,15 @@ function setValue(v) {
   renderValue();
 }
 const nudge = (d) => setValue(ui.mode === 'pitch' ? ui.semi + d : ui.speed + 0.05 * d);
-function setVolume(v) {
-  ui.volume = Math.min(1.2, Math.max(0, v));
-  $('#vol').value = ui.volume; paintRange($('#vol')); send('volume', 'volume', ui.volume);
+// кубическая шкала: середина ползунка ≈ 12% амплитуды — как в обычных плеерах
+function setVolume(pos) {
+  ui.volPos = Math.min(1, Math.max(0, pos));
+  showVolume();
+  send('volume', 'volume', ui.volPos ** 3);
+}
+function showVolume() {
+  $('#vol').value = ui.volPos; paintRange($('#vol'));
+  $('#volv').textContent = Math.round(ui.volPos * 100) + '%';
 }
 
 // ---------------------------------------------------------------- эффекты
@@ -563,7 +574,7 @@ document.querySelectorAll('[data-fxp]').forEach(b => b.onclick = () => applyFxPr
 // ---------------------------------------------------------------- история
 async function loadHistory() {
   try {
-    const r = await (await fetch('/api/history')).json();
+    const r = await (await api('/api/history')).json();
     hist = r.items; histRev = r.rev; histKey = '';
     renderHistoryIfNeeded();
   } catch (e) { /* ignore */ }
@@ -679,7 +690,7 @@ const sc = $('#spec'), sctx = sc.getContext('2d');
 let specTarget = [], specShown = [], specPeak = [];
 async function specLoop() {
   if (S && S.playing && !document.hidden) {
-    try { specTarget = (await (await fetch('/api/spectrum')).json()).bands; } catch (e) { specTarget = []; }
+    try { specTarget = (await (await api('/api/spectrum')).json()).bands; } catch (e) { specTarget = []; }
     setTimeout(specLoop, 35);
   } else {
     specTarget = [];
@@ -719,7 +730,7 @@ function drawSpectrum() {
 async function upload(file) {
   if (!file) return;
   $('#status').textContent = t('uploading');
-  try { await fetch('/api/upload', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file }); }
+  try { await api('/api/upload', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file }); }
   catch (e) { /* статус покажет poll */ }
 }
 function loadUrl(url) { url = (url || '').trim(); if (url) post('/api/url', { url }).catch(() => {}); }
@@ -755,7 +766,7 @@ addEventListener('keydown', (e) => {
   const map = {
     ' ': toggle,
     ArrowLeft: () => nudge(-1), ArrowRight: () => nudge(1),
-    ArrowUp: () => setVolume(ui.volume + 0.05), ArrowDown: () => setVolume(ui.volume - 0.05),
+    ArrowUp: () => setVolume(ui.volPos + 0.05), ArrowDown: () => setVolume(ui.volPos - 0.05),
     '0': () => setValue(ui.mode === 'pitch' ? 0 : 1),
     '1': () => setMode('vinyl'), '2': () => setMode('tempo'), '3': () => setMode('pitch'),
   };

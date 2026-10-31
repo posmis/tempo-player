@@ -60,6 +60,9 @@ def make_handler(ctl, server_ref):
                     return self._send(200, f.read(), "text/html; charset=utf-8")
             if path == "/api/state":
                 return self._send(200, ctl.state())
+            if path == "/api/spectrum":
+                bands = ctl.engine.spectrum() if ctl.engine.playing else []
+                return self._send(200, {"bands": [round(float(b), 3) for b in bands]})
             if path == "/api/history":
                 return self._send(200, {"rev": ctl.history.rev, "items": ctl.history.items()})
             if path == "/api/peaks":

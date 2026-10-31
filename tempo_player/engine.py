@@ -13,6 +13,8 @@ from .stretch import WSOLA
 
 BLOCK = 1024
 WAVE_BINS = 1200
+SCOPE_N = 4096      # сколько последних сэмплов вывода держим для спектра
+SPEC_BANDS = 56
 
 
 class Engine:
@@ -32,6 +34,8 @@ class Engine:
         self._rp = 0.0
         self._cur_pitch = 1.0
         self._cur_vol = self.volume
+        self._scope = np.zeros(SCOPE_N, dtype=np.float32)
+        self._scope_win = np.hanning(SCOPE_N).astype(np.float32)
 
     # ---------------- загрузка ----------------
     def load(self, data, sr):
@@ -72,6 +76,37 @@ class Engine:
 
     # ---------------- DSP ----------------
     def render(self, frames):
+        out = self._render(frames)
+        self._push_scope(out.mean(axis=1))
+        return out
+
+    def _push_scope(self, mono):
+        n = len(mono)
+        if n >= SCOPE_N:
+            self._scope = mono[-SCOPE_N:].astype(np.float32)
+        else:
+            sc = np.empty_like(self._scope)
+            sc[:-n] = self._scope[n:]
+            sc[-n:] = mono
+            self._scope = sc  # подмена ссылки целиком — читатель всегда видит целый массив
+
+    def spectrum(self, bands=SPEC_BANDS):
+        """Уровни частотных полос 0..1 (логарифмическая шкала 40 Гц – 16 кГц)."""
+        x = self._scope * self._scope_win
+        mag = np.abs(np.fft.rfft(x)) * (2.0 / self._scope_win.sum())
+        freqs = np.fft.rfftfreq(SCOPE_N, 1.0 / self.sr)
+        edges = np.geomspace(40.0, min(16000.0, self.sr * 0.45), bands + 1)
+        idx = np.searchsorted(freqs, edges)
+        out = np.empty(bands, dtype=np.float32)
+        for i in range(bands):
+            a = idx[i]
+            b = max(idx[i + 1], a + 1)
+            out[i] = mag[a:b].max()
+        centers = np.sqrt(edges[:-1] * edges[1:])
+        db = 20 * np.log10(out + 1e-9) + 3.0 * np.log2(centers / 1000.0)  # музыка тише на высоких — выравниваем
+        return np.clip((db + 66.0) / 56.0, 0.0, 1.0)
+
+    def _render(self, frames):
         out = np.zeros((frames, 2), dtype=np.float32)
         with self.lock:
             if self.src is None or not self.playing:

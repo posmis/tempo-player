@@ -22,7 +22,7 @@ class Controller:
         self.speed = 1.0
         self.semi = 0
         self.title = ""
-        self.status = ""
+        self.status = None  # {"key": ..., "args": {...}} — текст переводит страница
         self.error = False
         self.busy = False
         self.track_id = 0
@@ -78,27 +78,27 @@ class Controller:
                     except OSError:
                         pass
 
-        return self._start(job, "Загружаю…", video_id=None)
+        return self._start(job, "loading", video_id=None)
 
     def load_url(self, url):
         url = (url or "").strip()
         if not sources.looks_like_url(url):
-            self._set_status("Это не похоже на ссылку", error=True)
+            self._set_status("not_url", error=True)
             return False
 
         def job():
             if sources.cached(url):
-                self._set_status("Из кэша, без скачивания…")
+                self._set_status("from_cache")
 
             def progress(frac):
-                self._set_status(f"Скачиваю с YouTube…  {int(frac * 100)}%")
+                self._set_status("downloading", pct=int(frac * 100))
 
             path, title = sources.download_youtube(url, progress)
-            self._set_status("Подготавливаю звук…")
+            self._set_status("preparing")
             return sources.decode(path), title
 
         vid = sources.video_id(url)
-        return self._start(job, "Ищу видео…", video_id=vid)
+        return self._start(job, "searching", video_id=vid)
 
     def _start(self, job, status, video_id=None):
         with self._lock:
@@ -116,18 +116,19 @@ class Controller:
                 self.track_id += 1
                 if video_id:
                     self.history.add(video_id, title, len(data) / sr)
-                self._set_status("")
+                self._set_status(None)
                 self.engine.playing = True
             except Exception as e:  # noqa: BLE001 — любую ошибку показываем пользователю
-                self._set_status(f"Ошибка: {str(e)[:160] or e.__class__.__name__}", error=True)
+                self._set_status("error", error=True, msg=str(e)[:160] or e.__class__.__name__)
             finally:
                 self.busy = False
 
         threading.Thread(target=run, daemon=True).start()
         return True
 
-    def _set_status(self, text, error=False):
-        self.status, self.error = text, error
+    def _set_status(self, key, error=False, **args):
+        self.status = {"key": key, "args": args} if key else None
+        self.error = error
 
     # ------------------------------------------------------------ кэш
     def clear_cache(self):
@@ -135,7 +136,7 @@ class Controller:
             return False
         sources.clear_cache()
         self.history.touch()
-        self._set_status("Кэш очищен")
+        self._set_status("cache_cleared")
         return True
 
     # ------------------------------------------------------------ эффекты

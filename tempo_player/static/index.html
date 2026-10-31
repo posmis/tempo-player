@@ -81,6 +81,11 @@
   .title { font-size: 17px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .status { color: var(--muted); font-size: 12.5px; min-height: 18px; }
   .status.error { color: var(--error); }
+  canvas#spec { display: block; width: 100%; height: 76px; margin-top: 14px; }
+  .lang { display: inline-flex; background: var(--panel-2); border-radius: 10px; padding: 2px; gap: 2px; margin-right: 4px; }
+  .lang button { font-size: 11.5px; font-weight: 600; padding: 4px 9px; border-radius: 8px; color: var(--muted); letter-spacing: .3px; }
+  .lang button:hover { color: var(--text); }
+  .lang button.on { background: var(--border); color: var(--text); }
   canvas#wave { display: block; width: 100%; height: 88px; margin-top: 14px; cursor: pointer; touch-action: none; }
   .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; padding: 2px 2px 0; font-variant-numeric: tabular-nums; }
 
@@ -190,15 +195,16 @@
   <main>
     <header>
       <div class="logo">tempo<span>player</span></div>
-      <button class="ghost" id="cache" disabled>Кэш пуст</button>
-      <button class="soft" id="open">Открыть файл</button>
+      <div class="lang" id="lang"><button data-lang="ru">RU</button><button data-lang="en">EN</button></div>
+      <button class="ghost" id="cache" disabled></button>
+      <button class="soft" id="open" data-i18n="open"></button>
       <input type="file" id="file" accept="audio/*,video/*,.mp3,.wav,.flac,.ogg,.m4a,.opus,.webm,.aac" hidden>
     </header>
 
     <div class="card">
       <form class="src" id="src">
-        <input id="url" type="text" autocomplete="off" spellcheck="false" placeholder="Вставьте ссылку на YouTube и нажмите Enter">
-        <button class="primary" id="go" type="submit">Слушать</button>
+        <input id="url" type="text" autocomplete="off" spellcheck="false" data-i18n-ph="url_ph">
+        <button class="primary" id="go" type="submit"></button>
       </form>
     </div>
 
@@ -206,22 +212,23 @@
       <div class="now">
         <button class="play" id="play" aria-label="Play / Pause"><svg viewBox="0 0 24 24" id="icon"><path d="M7 4.5v15l13-7.5z"/></svg></button>
         <div class="meta">
-          <div class="title" id="title">Ничего не играет</div>
+          <div class="title" id="title"></div>
           <div class="status" id="status"></div>
         </div>
       </div>
+      <canvas id="spec"></canvas>
       <canvas id="wave"></canvas>
       <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
     </div>
 
     <div class="card speed">
       <div class="seg" id="modes">
-        <button data-mode="vinyl">Пластинка</button>
-        <button data-mode="tempo">Только темп</button>
-        <button data-mode="pitch">Только тон</button>
+        <button data-mode="vinyl" data-i18n="mode_vinyl"></button>
+        <button data-mode="tempo" data-i18n="mode_tempo"></button>
+        <button data-mode="pitch" data-i18n="mode_pitch"></button>
       </div>
       <div class="value" id="value">1.00×</div>
-      <div class="caption" id="caption">оригинальная скорость</div>
+      <div class="caption" id="caption"></div>
       <input type="range" id="slider">
       <div class="range-labels"><span id="rmin"></span><span id="rmax"></span></div>
       <div class="presets" id="presets"></div>
@@ -229,39 +236,114 @@
 
     <div class="card">
       <div class="card-head">
-        <h2>Эффекты</h2>
+        <h2 data-i18n="fx_title"></h2>
         <div class="fx-presets">
           <button class="chip" data-fxp="slowed">Slowed + Reverb</button>
           <button class="chip" data-fxp="lofi">Lo-fi</button>
-          <button class="chip" data-fxp="off">Без эффектов</button>
+          <button class="chip" data-fxp="off" data-i18n="fxp_off"></button>
         </div>
       </div>
       <div class="fx-grid" id="fxgrid"></div>
     </div>
 
     <footer>
-      <div class="keys"><kbd>Пробел</kbd> пауза · <kbd>← →</kbd> скорость · <kbd>1 2 3</kbd> режим · <kbd>0</kbd> сброс</div>
-      <div class="vol">Громкость <input type="range" id="vol" class="thin" min="0" max="1.2" step="0.01"></div>
-      <button class="ghost" id="quit">Выключить</button>
+      <div class="keys" data-i18n-html="keys"></div>
+      <div class="vol"><span data-i18n="volume"></span> <input type="range" id="vol" class="thin" min="0" max="1.2" step="0.01"></div>
+      <button class="ghost" id="quit" data-i18n="quit"></button>
     </footer>
   </main>
 
   <aside class="side">
     <div class="card">
       <div class="card-head">
-        <h2>Недавние<span class="count" id="hcount"></span></h2>
-        <button class="ghost small" id="hclear" hidden>Очистить</button>
+        <h2><span data-i18n="recent"></span><span class="count" id="hcount"></span></h2>
+        <button class="ghost small" id="hclear" data-i18n="clear" hidden></button>
       </div>
       <div class="hlist" id="hlist"></div>
     </div>
   </aside>
 </div>
 
-<div class="overlay" id="drop"><div class="box">Отпустите файл<small>mp3, wav, flac, ogg, m4a…</small></div></div>
-<div class="overlay off" id="offline"><div class="box">Плеер выключен<small>Запустите main.py снова и обновите страницу</small></div></div>
+<div class="overlay" id="drop"><div class="box"><span data-i18n="drop"></span><small>mp3, wav, flac, ogg, m4a…</small></div></div>
+<div class="overlay off" id="offline"><div class="box"><span data-i18n="off_title"></span><small data-i18n="off_sub"></small></div></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
+
+// ---------------------------------------------------------------- языки
+const I18N = {
+  ru: {
+    title_none: 'Ничего не играет',
+    hint_loaded: 'Пробел — пауза · файл можно просто перетащить в окно',
+    hint_empty: 'Откройте файл, перетащите его сюда или вставьте ссылку',
+    open: 'Открыть файл', cache_empty: 'Кэш пуст', cache_clear: 'Очистить кэш · {mb} МБ',
+    url_ph: 'Вставьте ссылку на YouTube и нажмите Enter', listen: 'Слушать',
+    mode_vinyl: 'Пластинка', mode_tempo: 'Только темп', mode_pitch: 'Только тон',
+    orig_pitch: 'оригинальный тон', orig_speed: 'оригинальная скорость',
+    faster: 'быстрее', slower: 'медленнее', voice_up: 'голос выше', voice_down: 'голос ниже',
+    pitch_same: 'тон тот же', tempo_same: 'темп тот же', higher: 'выше', lower: 'ниже',
+    fx_title: 'Эффекты', fxp_off: 'Без эффектов',
+    fx_reverb: 'Реверб', fx_bass: 'Бас', fx_echo: 'Эхо', fx_lofi: 'Lo-fi',
+    s_size: 'Размер зала', s_mix: 'Сила', s_gain: 'Усиление', s_time: 'Задержка', s_feedback: 'Повторы',
+    s_tone: 'Приглушение', s_crackle: 'Треск пластинки', u_db: 'дБ', u_ms: 'мс',
+    keys: '<kbd>Пробел</kbd> пауза · <kbd>← →</kbd> скорость · <kbd>1 2 3</kbd> режим · <kbd>0</kbd> сброс',
+    volume: 'Громкость', quit: 'Выключить',
+    recent: 'Недавние', clear: 'Очистить', hist_empty: 'Здесь появятся видео с YouTube, которые вы слушали',
+    in_cache: 'в кэше', redownload: 'скачается заново', today: 'сегодня', yesterday: 'вчера', days_ago: '{n} дн. назад',
+    remove: 'Убрать из списка', confirm_clear: 'Очистить список недавних? Скачанные файлы в кэше останутся.',
+    drop: 'Отпустите файл', off_title: 'Плеер выключен', off_sub: 'Запустите main.py снова и обновите страницу',
+    uploading: 'Передаю файл…',
+    st_loading: 'Загружаю…', st_searching: 'Ищу видео…', st_from_cache: 'Из кэша, без скачивания…',
+    st_downloading: 'Скачиваю с YouTube…  {pct}%', st_preparing: 'Подготавливаю звук…',
+    st_not_url: 'Это не похоже на ссылку', st_error: 'Ошибка: {msg}', st_cache_cleared: 'Кэш очищен',
+  },
+  en: {
+    title_none: 'Nothing playing',
+    hint_loaded: 'Space — pause · you can drop a file right into the window',
+    hint_empty: 'Open a file, drop it here or paste a link',
+    open: 'Open file', cache_empty: 'Cache empty', cache_clear: 'Clear cache · {mb} MB',
+    url_ph: 'Paste a YouTube link and press Enter', listen: 'Play',
+    mode_vinyl: 'Vinyl', mode_tempo: 'Tempo only', mode_pitch: 'Pitch only',
+    orig_pitch: 'original pitch', orig_speed: 'original speed',
+    faster: 'faster', slower: 'slower', voice_up: 'higher voice', voice_down: 'lower voice',
+    pitch_same: 'same pitch', tempo_same: 'same tempo', higher: 'higher', lower: 'lower',
+    fx_title: 'Effects', fxp_off: 'No effects',
+    fx_reverb: 'Reverb', fx_bass: 'Bass', fx_echo: 'Echo', fx_lofi: 'Lo-fi',
+    s_size: 'Room size', s_mix: 'Amount', s_gain: 'Boost', s_time: 'Delay', s_feedback: 'Repeats',
+    s_tone: 'Muffle', s_crackle: 'Vinyl crackle', u_db: 'dB', u_ms: 'ms',
+    keys: '<kbd>Space</kbd> pause · <kbd>← →</kbd> speed · <kbd>1 2 3</kbd> mode · <kbd>0</kbd> reset',
+    volume: 'Volume', quit: 'Quit',
+    recent: 'Recent', clear: 'Clear', hist_empty: 'YouTube videos you play will show up here',
+    in_cache: 'cached', redownload: 'will re-download', today: 'today', yesterday: 'yesterday', days_ago: '{n} days ago',
+    remove: 'Remove from list', confirm_clear: 'Clear the recent list? Downloaded files stay in the cache.',
+    drop: 'Drop the file', off_title: 'Player stopped', off_sub: 'Run main.py again and reload the page',
+    uploading: 'Uploading file…',
+    st_loading: 'Loading…', st_searching: 'Looking up the video…', st_from_cache: 'From cache, no download…',
+    st_downloading: 'Downloading from YouTube…  {pct}%', st_preparing: 'Preparing audio…',
+    st_not_url: "That doesn't look like a link", st_error: 'Error: {msg}', st_cache_cleared: 'Cache cleared',
+  },
+};
+let lang = 'ru';
+try { if (localStorage.getItem('lang') === 'en') lang = 'en'; } catch (e) { /* без localStorage — русский */ }
+const t = (key, args = {}) => (I18N[lang][key] ?? I18N.ru[key] ?? key).replace(/\{(\w+)\}/g, (_, k) => args[k] ?? '');
+const locale = () => (lang === 'en' ? 'en-GB' : 'ru-RU');
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(e => { e.textContent = t(e.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(e => { e.innerHTML = t(e.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(e => { e.placeholder = t(e.dataset.i18nPh); });
+  document.querySelectorAll('#lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  renderMode();
+  if (synced) buildFx();
+  histKey = '';
+  if (S) onState();
+}
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem('lang', l); } catch (e) { /* ignore */ }
+  applyLang();
+}
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const SPEED_PRESETS = [0.70, 0.80, 0.90, 1.00, 1.15, 1.25, 1.35];
 const SEMI_PRESETS = [-5, -3, -2, 0, 2, 3, 5];
@@ -269,18 +351,18 @@ const ICON_PLAY = '<path d="M7 4.5v15l13-7.5z"/>';
 const ICON_PAUSE = '<rect x="5.5" y="4.5" width="4.5" height="15" rx="1.2"/><rect x="14" y="4.5" width="4.5" height="15" rx="1.2"/>';
 const pct = (v) => `${Math.round(v * 100)}%`;
 const FX = [
-  { name: 'reverb', title: 'Реверб', sliders: [
-    { key: 'size', label: 'Размер зала', min: 0, max: 1, step: 0.01, fmt: pct },
-    { key: 'mix', label: 'Сила', min: 0, max: 1, step: 0.01, fmt: pct }] },
-  { name: 'bass', title: 'Бас', sliders: [
-    { key: 'gain', label: 'Усиление', min: 0, max: 15, step: 0.5, fmt: (v) => `+${(+v).toFixed(1)} дБ` }] },
-  { name: 'echo', title: 'Эхо', sliders: [
-    { key: 'time', label: 'Задержка', min: 0.05, max: 1, step: 0.01, fmt: (v) => `${Math.round(v * 1000)} мс` },
-    { key: 'feedback', label: 'Повторы', min: 0, max: 0.85, step: 0.01, fmt: pct },
-    { key: 'mix', label: 'Сила', min: 0, max: 1, step: 0.01, fmt: pct }] },
-  { name: 'lofi', title: 'Lo-fi', sliders: [
-    { key: 'tone', label: 'Приглушение', min: 0, max: 1, step: 0.01, fmt: pct },
-    { key: 'crackle', label: 'Треск пластинки', min: 0, max: 1, step: 0.01, fmt: pct }] },
+  { name: 'reverb', sliders: [
+    { key: 'size', label: 's_size', min: 0, max: 1, step: 0.01, fmt: pct },
+    { key: 'mix', label: 's_mix', min: 0, max: 1, step: 0.01, fmt: pct }] },
+  { name: 'bass', sliders: [
+    { key: 'gain', label: 's_gain', min: 0, max: 15, step: 0.5, fmt: (v) => `+${(+v).toFixed(1)} ${t('u_db')}` }] },
+  { name: 'echo', sliders: [
+    { key: 'time', label: 's_time', min: 0.05, max: 1, step: 0.01, fmt: (v) => `${Math.round(v * 1000)} ${t('u_ms')}` },
+    { key: 'feedback', label: 's_feedback', min: 0, max: 0.85, step: 0.01, fmt: pct },
+    { key: 'mix', label: 's_mix', min: 0, max: 1, step: 0.01, fmt: pct }] },
+  { name: 'lofi', sliders: [
+    { key: 'tone', label: 's_tone', min: 0, max: 1, step: 0.01, fmt: pct },
+    { key: 'crackle', label: 's_crackle', min: 0, max: 1, step: 0.01, fmt: pct }] },
 ];
 
 let S = null, recvAt = 0, synced = false;
@@ -331,17 +413,16 @@ function onState() {
     renderMode(); buildFx();
     synced = true;
   }
-  $('#title').textContent = S.title || 'Ничего не играет';
+  $('#title').textContent = S.title || t('title_none');
   document.title = S.title ? `${S.title} · tempo player` : 'tempo player';
   const st = $('#status');
-  st.textContent = S.status || (S.loaded ? 'Пробел — пауза · файл можно просто перетащить в окно'
-                                         : 'Откройте файл, перетащите его сюда или вставьте ссылку');
+  st.textContent = S.status ? t('st_' + S.status.key, S.status.args) : t(S.loaded ? 'hint_loaded' : 'hint_empty');
   st.classList.toggle('error', !!S.error);
   $('#go').disabled = S.busy;
-  $('#go').textContent = S.busy ? '…' : 'Слушать';
+  $('#go').textContent = S.busy ? '…' : t('listen');
   const mb = S.cache_mb;
   $('#cache').disabled = mb < 0.5 || S.busy;
-  $('#cache').textContent = mb >= 0.5 ? `Очистить кэш · ${Math.round(mb)} МБ` : 'Кэш пуст';
+  $('#cache').textContent = mb >= 0.5 ? t('cache_clear', { mb: Math.round(mb) }) : t('cache_empty');
   $('#dur').textContent = fmt(S.duration);
   if (S.track_id !== peaksId) loadPeaks();
   if (S.history_rev !== histRev) loadHistory();
@@ -356,6 +437,7 @@ async function loadPeaks() {
 // ---------------------------------------------------------------- скорость
 function semiWord(n) {
   n = Math.abs(n);
+  if (lang === 'en') return n === 1 ? 'semitone' : 'semitones';
   if (n % 10 === 1 && n % 100 !== 11) return 'полутон';
   if (n % 10 >= 2 && n % 10 <= 4 && !(n % 100 >= 12 && n % 100 <= 14)) return 'полутона';
   return 'полутонов';
@@ -388,13 +470,13 @@ function renderValue() {
   if (ui.mode === 'pitch') {
     cur = ui.semi; dir = Math.sign(cur);
     text = cur > 0 ? `+${cur}` : cur < 0 ? `−${-cur}` : '0';
-    cap = cur === 0 ? 'оригинальный тон' : `${semiWord(cur)} ${cur > 0 ? 'выше' : 'ниже'} · темп тот же`;
+    cap = cur === 0 ? t('orig_pitch') : `${semiWord(cur)} ${t(cur > 0 ? 'higher' : 'lower')} · ${t('tempo_same')}`;
   } else {
     cur = ui.speed; dir = Math.sign(Math.round((cur - 1) * 100));
     text = `${cur.toFixed(2)}×`;
-    const word = dir > 0 ? 'быстрее' : 'медленнее';
-    cap = dir === 0 ? 'оригинальная скорость'
-        : ui.mode === 'vinyl' ? `${word} · голос ${dir > 0 ? 'выше' : 'ниже'}` : `${word} · тон тот же`;
+    const word = t(dir > 0 ? 'faster' : 'slower');
+    cap = dir === 0 ? t('orig_speed')
+        : ui.mode === 'vinyl' ? `${word} · ${t(dir > 0 ? 'voice_up' : 'voice_down')}` : `${word} · ${t('pitch_same')}`;
   }
   val.textContent = text;
   val.className = 'value' + (dir > 0 ? ' fast' : dir < 0 ? ' slow' : '');
@@ -430,11 +512,11 @@ function buildFx() {
     const top = el('div', 'fx-top');
     const sw = el('label', 'switch'); const cb = el('input'); cb.type = 'checkbox'; sw.append(cb, el('span'));
     cb.onchange = () => setFx(fx.name, 'on', cb.checked);
-    top.append(el('span', 'fx-name', fx.title), sw);
+    top.append(el('span', 'fx-name', t('fx_' + fx.name)), sw);
     tile.append(top);
     for (const s of fx.sliders) {
       const row = el('div', 'fx-row'); const out = el('output'); out.dataset.key = s.key;
-      row.append(el('span', null, s.label), out);
+      row.append(el('span', null, t(s.label)), out);
       const r = el('input', 'thin'); r.type = 'range'; Object.assign(r, { min: s.min, max: s.max, step: s.step });
       r.dataset.key = s.key;
       r.oninput = () => {
@@ -489,21 +571,21 @@ async function loadHistory() {
 function ago(ts) {
   const d = new Date(ts * 1000), now = new Date();
   const days = Math.floor((new Date(now.toDateString()) - new Date(d.toDateString())) / 864e5);
-  const hm = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  if (days === 0) return `сегодня ${hm}`;
-  if (days === 1) return `вчера ${hm}`;
-  if (days < 7) return `${days} дн. назад`;
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  const hm = d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  if (days === 0) return `${t('today')} ${hm}`;
+  if (days === 1) return `${t('yesterday')} ${hm}`;
+  if (days < 7) return t('days_ago', { n: days });
+  return d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 }
 function renderHistoryIfNeeded() {
   const playing = !!(S && S.playing);
-  const key = `${histRev}|${S && S.current_id}|${playing}|${Math.floor(Date.now() / 60000)}`;
+  const key = `${lang}|${histRev}|${S && S.current_id}|${playing}|${Math.floor(Date.now() / 60000)}`;
   if (key === histKey) return;
   histKey = key;
   const list = $('#hlist'); list.innerHTML = '';
   $('#hcount').textContent = hist.length ? ` · ${hist.length}` : '';
   $('#hclear').hidden = !hist.length;
-  if (!hist.length) { list.append(el('div', 'hempty', 'Здесь появятся видео с YouTube, которые вы слушали')); return; }
+  if (!hist.length) { list.append(el('div', 'hempty', t('hist_empty'))); return; }
   for (const it of hist) {
     const current = S && S.current_id === it.id;
     const row = el('div', 'hrow' + (current ? ' current' : '')); row.title = it.title;
@@ -516,9 +598,9 @@ function renderHistoryIfNeeded() {
     const meta = el('div', 'hmeta');
     const sub = el('div', 'hsub');
     if (it.cached) sub.append(el('span', 'dot'));
-    sub.append(document.createTextNode(`${fmt(it.duration)} · ${it.cached ? 'в кэше' : 'скачается заново'} · ${ago(it.played_at)}`));
+    sub.append(document.createTextNode(`${fmt(it.duration)} · ${t(it.cached ? 'in_cache' : 'redownload')} · ${ago(it.played_at)}`));
     meta.append(el('div', 'htitle', it.title), sub);
-    const del = el('button', 'hdel', '×'); del.title = 'Убрать из списка';
+    const del = el('button', 'hdel', '×'); del.title = t('remove');
     del.onclick = (e) => { e.stopPropagation(); hist = hist.filter(h => h.id !== it.id); histKey = ''; renderHistoryIfNeeded(); act('history_remove', it.id); };
     row.onclick = () => { if (current) toggle(); else loadUrl(it.url); };
     row.append(icon, meta, del);
@@ -526,7 +608,7 @@ function renderHistoryIfNeeded() {
   }
 }
 $('#hclear').onclick = () => {
-  if (confirm('Очистить список недавних? Скачанные файлы в кэше останутся.')) { hist = []; histKey = ''; renderHistoryIfNeeded(); act('history_clear'); }
+  if (confirm(t('confirm_clear'))) { hist = []; histKey = ''; renderHistoryIfNeeded(); act('history_clear'); }
 };
 
 // ---------------------------------------------------------------- плеер
@@ -577,6 +659,7 @@ function draw() {
   }
   $('#pos').textContent = fmt(dragFrac != null && S ? dragFrac * S.duration : position());
   $('#icon').innerHTML = playingNow() ? ICON_PAUSE : ICON_PLAY;
+  drawSpectrum();
   requestAnimationFrame(draw);
 }
 const fracAt = (e) => Math.min(1, Math.max(0, (e.clientX - cv.getBoundingClientRect().left - 4) / (cv.clientWidth - 8)));
@@ -591,10 +674,51 @@ cv.addEventListener('pointerup', (e) => {
   act('seek', sec);
 });
 
+// ---------------------------------------------------------------- спектр
+const sc = $('#spec'), sctx = sc.getContext('2d');
+let specTarget = [], specShown = [], specPeak = [];
+async function specLoop() {
+  if (S && S.playing && !document.hidden) {
+    try { specTarget = (await (await fetch('/api/spectrum')).json()).bands; } catch (e) { specTarget = []; }
+    setTimeout(specLoop, 35);
+  } else {
+    specTarget = [];
+    setTimeout(specLoop, 150);
+  }
+}
+function drawSpectrum() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = sc.clientWidth, h = sc.clientHeight;
+  if (sc.width !== Math.round(w * dpr) || sc.height !== Math.round(h * dpr)) { sc.width = Math.round(w * dpr); sc.height = Math.round(h * dpr); }
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.clearRect(0, 0, w, h);
+  const n = 56, gap = 3, bw = Math.max(2, (w - gap * (n - 1)) / n);
+  const css = getComputedStyle(document.documentElement);
+  const grad = sctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, css.getPropertyValue('--terracotta'));
+  grad.addColorStop(0.5, css.getPropertyValue('--accent'));
+  grad.addColorStop(1, css.getPropertyValue('--gold'));
+  for (let i = 0; i < n; i++) {
+    const target = specTarget[i] || 0, cur = specShown[i] || 0;
+    const v = target > cur ? cur + (target - cur) * 0.55 : cur - Math.max(0.012, (cur - target) * 0.14);  // быстро вверх, плавно вниз
+    specShown[i] = Math.max(0, v);
+    specPeak[i] = Math.max(specShown[i], (specPeak[i] || 0) - 0.006);
+    const x = i * (bw + gap), bh = Math.max(2, specShown[i] * (h - 6));
+    sctx.fillStyle = grad;
+    sctx.globalAlpha = specShown[i] > 0.01 ? 1 : 0.35;
+    sctx.beginPath(); sctx.roundRect(x, h - bh, bw, bh, Math.min(2, bw / 2)); sctx.fill();
+    if (specPeak[i] > 0.03) {
+      sctx.globalAlpha = 0.55; sctx.fillStyle = css.getPropertyValue('--text');
+      sctx.fillRect(x, h - 4 - specPeak[i] * (h - 6), bw, 2);
+    }
+  }
+  sctx.globalAlpha = 1;
+}
+
 // ---------------------------------------------------------------- загрузка
 async function upload(file) {
   if (!file) return;
-  $('#status').textContent = 'Передаю файл…';
+  $('#status').textContent = t('uploading');
   try { await fetch('/api/upload', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file }); }
   catch (e) { /* статус покажет poll */ }
 }
@@ -638,8 +762,10 @@ addEventListener('keydown', (e) => {
   if (map[e.key]) { e.preventDefault(); map[e.key](); }
 });
 
-renderMode();
+document.querySelectorAll('#lang button').forEach(b => b.onclick = () => setLang(b.dataset.lang));
+applyLang();
 poll();
+specLoop();
 requestAnimationFrame(draw);
 </script>
 </body>

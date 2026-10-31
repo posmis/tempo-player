@@ -7,7 +7,7 @@ import copy
 import threading
 
 import numpy as np
-from pedalboard import Delay, Limiter, LowpassFilter, LowShelfFilter, Reverb
+from pedalboard import Delay, LowpassFilter, LowShelfFilter, Reverb
 
 DEFAULTS = {
     "reverb": {"on": False, "size": 0.75, "mix": 0.35},
@@ -40,7 +40,7 @@ class Effects:
         self.lowpass = LowpassFilter()
         self.delay = Delay()
         self.reverb = Reverb(damping=0.45, width=1.0)
-        self.limiter = Limiter(threshold_db=-1.0, release_ms=120)  # бас не даст перегруза
+        self._lim_gain = 1.0  # свой лимитер: Limiter из pedalboard поднимает громкость и сжимает звук всегда
         self._rng = np.random.default_rng()
         self._click_tail = np.zeros(len(_CLICK) - 1, dtype=np.float32)
 
@@ -115,5 +115,23 @@ class Effects:
             x = self.reverb.process(x, sr, reset=False)
         if on["lofi"] and crackle > 0:
             x = x + self._crackle(x.shape[1], sr, crackle)[None, :]
-        x = self.limiter.process(np.ascontiguousarray(x, dtype=np.float32), sr, reset=False)
-        return x.T
+        return self._limit(np.ascontiguousarray(x.T, dtype=np.float32), sr)
+
+    def _limit(self, x, sr, ceiling=0.95):
+        """Защита от перегруза. Пока пики ниже ceiling — звук не трогается вообще."""
+        peak = float(np.abs(x).max()) if x.size else 0.0
+        target = min(1.0, ceiling / peak) if peak > 0 else 1.0
+        g0 = self._lim_gain
+        if target < g0:
+            g1 = target  # громкий пик — убавляем сразу
+        else:
+            g1 = min(target, g0 + (1.0 - g0) * (1 - np.exp(-len(x) / (0.25 * sr))))  # отпускаем ~0.25 с
+        self._lim_gain = g1
+        if g0 != 1.0 or g1 != 1.0:
+            x *= np.linspace(g0, g1, len(x), dtype=np.float32)[:, None]
+        # на случай пика в начале блока, пока усиление ещё не опустилось
+        over = np.abs(x) > ceiling
+        if over.any():
+            a = np.abs(x[over])
+            x[over] = np.sign(x[over]) * (ceiling + (1 - ceiling) * np.tanh((a - ceiling) / (1 - ceiling)))
+        return x

@@ -8,6 +8,7 @@
 import threading
 
 import numpy as np
+from . import resample
 from .effects import Effects
 from .stretch import WSOLA
 
@@ -24,13 +25,13 @@ class Engine:
         self.peaks = None
         self.tempo = 1.0
         self.pitch = 1.0
-        self.volume = 0.6 ** 3  # громкость — множитель амплитуды; ползунок = корень кубический
+        self.volume = 10 ** (-36 / 20)  # множитель амплитуды; −36 дБ = 50% на ползунке
         self.playing = False
         self.lock = threading.Lock()
         self.stream = None
         self.stretch = WSOLA()
         self.fx = Effects()
-        self._buf = np.zeros((0, 2), dtype=np.float32)
+        self._buf = np.zeros((resample.HISTORY, 2), dtype=np.float32)
         self._rp = 0.0
         self._cur_pitch = 1.0
         self._cur_vol = self.volume
@@ -49,7 +50,7 @@ class Engine:
         with self.lock:
             self.src, self.sr, self.peaks = data, sr, peaks
             self.stretch.set_source(data)
-            self._buf = np.zeros((0, 2), dtype=np.float32)
+            self._buf = np.zeros((resample.HISTORY, 2), dtype=np.float32)
             self._rp = 0.0
             self.playing = False
 
@@ -114,12 +115,14 @@ class Engine:
             p0, p1 = self._cur_pitch, self.pitch
             self._cur_pitch = p1
             steps = np.linspace(p0, p1, frames, endpoint=False)
-            idx = self._rp + np.concatenate(([0.0], np.cumsum(steps[:-1])))
+            # позиции чтения; слева в буфере всегда HISTORY сэмплов истории для фильтра
+            idx = resample.HISTORY + self._rp + np.concatenate(([0.0], np.cumsum(steps[:-1])))
+            ratio = max(p0, p1)
 
             # WSOLA должна выдать звук в темпе tempo/pitch — ресемплер потом
             # ускорит его в pitch раз, и в сумме получится нужный темп
             self.stretch.factor = self.tempo / p1
-            need = int(idx[-1]) + 2
+            need = int(idx[-1]) + resample.kernel_reach(ratio) + 1
             chunks, have = [self._buf], len(self._buf)
             while have < need:
                 c = self.stretch.step()
@@ -127,9 +130,7 @@ class Engine:
                 have += len(c)
             buf = np.concatenate(chunks) if len(chunks) > 1 else self._buf
 
-            i0 = idx.astype(np.int64)
-            f = (idx - i0)[:, None].astype(np.float32)
-            out[:] = buf[i0] * (1.0 - f) + buf[i0 + 1] * f
+            out[:] = resample.interpolate(buf, idx, ratio)
 
             adv = self._rp + steps.sum()
             drop = int(adv)
@@ -169,7 +170,7 @@ class Engine:
     def _seek(self, sec):
         pos = float(np.clip(sec * self.sr, 0, len(self.src) - 1))
         self.stretch.reset(pos)
-        self._buf = np.zeros((0, 2), dtype=np.float32)
+        self._buf = np.zeros((resample.HISTORY, 2), dtype=np.float32)
         self._rp = 0.0
 
     def seek(self, sec):

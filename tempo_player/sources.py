@@ -58,9 +58,17 @@ def _titles():
         return {}
 
 
-def _remember_title(video_id, title):
+def meta(video_id):
+    """Сведения о скачанном видео: {title, channel, artist, track} (что известно)."""
+    m = _titles().get(video_id)
+    if isinstance(m, str):  # старый формат — только название
+        return {"title": m}
+    return m or {}
+
+
+def _remember_title(video_id, title, **extra):
     titles = _titles()
-    titles[video_id] = title
+    titles[video_id] = {"title": title, **{k: v for k, v in extra.items() if v}}
     with open(_TITLES, "w", encoding="utf-8") as f:
         json.dump(titles, f, ensure_ascii=False)
 
@@ -77,13 +85,12 @@ def cached(url):
         return None
     for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), vid + ".*")):
         if not path.endswith((".part", ".ytdl", ".json")):
-            return path, _titles().get(vid, "YouTube")
+            return path, meta(vid).get("title", "YouTube")
     return None
 
 
 def cached_tracks():
     """Все треки, которые уже лежат в кэше: [{id, url, title, size, mtime}]."""
-    titles = _titles()
     out = []
     for path in glob.glob(os.path.join(glob.escape(CACHE_DIR), "*")):
         if not os.path.isfile(path):
@@ -94,7 +101,7 @@ def cached_tracks():
             continue
         st = os.stat(path)
         out.append({"id": vid, "url": f"https://www.youtube.com/watch?v={vid}",
-                    "title": titles.get(vid, "YouTube"), "size": st.st_size, "mtime": st.st_mtime})
+                    "size": st.st_size, "mtime": st.st_mtime, **{"title": "YouTube", **meta(vid)}})
     return out
 
 
@@ -105,6 +112,26 @@ def delete_cached(video_id):
                 os.remove(path)
             except OSError:
                 pass
+
+
+# ---------------------------------------------------------------- исполнитель / название
+_DASH = re.compile(r"\s+[-–—]\s+")
+_JUNK = re.compile(
+    r"\s*[(\[](?:official|оф\w*|lyrics?|lyric video|текст|audio|video|music video|mv|hd|hq|4k|"
+    r"visuali[sz]er|clip|клип|премьера|premiere)[^)\]]*[)\]]", re.I)
+
+
+def split_title(title, channel=None, artist=None, track=None, **_):
+    """(исполнитель, название). У YouTube исполнителя отдельно обычно нет — угадываем:
+    1) поля artist/track (официальная музыка), 2) «Исполнитель - Песня», 3) имя канала."""
+    if artist and track:
+        return artist, track
+    clean = _JUNK.sub("", title or "").strip() or (title or "")
+    parts = _DASH.split(clean, maxsplit=1)
+    if len(parts) == 2 and parts[0].strip() and parts[1].strip():
+        return parts[0].strip(), parts[1].strip()
+    ch = re.sub(r"(\s*-\s*Topic|VEVO)$", "", channel or "").strip()
+    return ch, clean
 
 
 def cache_size():
@@ -155,7 +182,9 @@ def download_youtube(url, progress=None):
             if "entries" in info:
                 info = info["entries"][0]
             title = info.get("title") or "YouTube"
-            _remember_title(info["id"], title)
+            artists = info.get("artists") or ([info["artist"]] if info.get("artist") else [])
+            _remember_title(info["id"], title, channel=info.get("channel") or info.get("uploader"),
+                            artist=", ".join(artists), track=info.get("track"))
             return ydl.prepare_filename(info), title
     except yt_dlp.utils.DownloadError as e:
         # «ERROR: [youtube] abc: Video unavailable; please report…» -> «Video unavailable»

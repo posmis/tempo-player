@@ -27,6 +27,7 @@ class Controller:
         self.busy = False
         self.track_id = 0
         self.current_id = None  # id видео YouTube, которое сейчас загружено
+        self.author = ""
         self.history = History()
         self._lock = threading.Lock()
         self._apply()
@@ -112,10 +113,12 @@ class Controller:
                 (data, sr), title = job()
                 self.engine.load(data, sr)
                 self.title = title
+                meta = sources.meta(video_id) if video_id else {}
+                self.author, self.title = sources.split_title(**{**meta, "title": title})
                 self.current_id = video_id
                 self.track_id += 1
                 if video_id:
-                    self.history.add(video_id, title, len(data) / sr)
+                    self.history.add(video_id, title, len(data) / sr)  # полное название, как на YouTube
                 self._set_status(None)
                 self.engine.playing = True
             except Exception as e:  # noqa: BLE001 — любую ошибку показываем пользователю
@@ -152,9 +155,10 @@ class Controller:
         items = []
         for f in sources.cached_tracks():
             h = meta.get(f["id"], {})
+            author, name = sources.split_title(**{**f, "title": f["title"] if f["title"] != "YouTube" else h.get("title", "YouTube")})
             items.append({
                 "id": f["id"], "url": f["url"],
-                "title": h.get("title") or f["title"],
+                "author": author, "name": name,
                 "duration": h.get("duration"),
                 "size_mb": round(f["size"] / 1024 / 1024, 1),
                 "played_at": h.get("played_at") or f["mtime"],
@@ -181,6 +185,7 @@ class Controller:
             "semi": self.semi,
             "volume": e.volume,
             "title": self.title,
+            "author": self.author,
             "status": self.status,
             "error": self.error,
             "busy": self.busy,

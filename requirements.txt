@@ -1,3 +1,6 @@
 numpy
 soundfile>=0.12
 sounddevice
+customtkinter>=5.2
+yt-dlp
+imageio-ffmpeg
